@@ -47,15 +47,16 @@ export class ReciptToSheetService {
         sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
 
         let csvData = "0,1,2,3,4,5,6,7,8,9\n"
+        textArr[0] = '"'+textArr[0]+'"'
         const textData = textArr.reduce((acc, cur, idx) => {
-            if (idx%9 === 0) {
-                return acc +','+ cur + '\n'
+            if (idx%10 === 9) {
+                return acc +','+ '"' + cur+ '"' + '\n'
             }
-            else if (idx%9 === 1) {
-                return acc + cur
+            else if (idx!==0 && idx%10 === 0) {
+                return acc + '"' + cur + '"'
             }
             else {
-                return acc +','+ cur
+                return acc +','+ '"' + cur + '"'
             }
         })
         csvData += textData
@@ -98,7 +99,7 @@ export class ReciptToSheetService {
 
         // 영수증인지 확인하기 (optional, potentially essential)
 
-        // AWS | Google Cloud 에 이미지 업로드 (optional, potentially necessary)
+        // AWS | Google Cloud 에 이미지 업로드 (optional, potentially necessary) (구글 클라우드 사용하면 비젼돌리는것과 합쳐서 한방에 처리가능하지 않을까?)
 
         // 구글 비젼 API 돌리기
         const annotateResult = await this.annotateImage(reciptImage);
