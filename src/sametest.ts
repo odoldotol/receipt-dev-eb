@@ -1,5 +1,7 @@
-const kjsbdkasjd = {
-	"email": "Email sent",
+const abc = {
+	"email": {
+		"Email sent": []
+	},
 	"annotateResult": [
 		{
 			"faceAnnotations": [],

@@ -93,13 +93,13 @@ export class ReciptToSheetService {
         let result
         await sgMail
             .send(msg)
-            .then(() => {
+            .then((res) => {
                 // console.log('Email sent')
-                result = 'Email sent'
+                result = {'Email sent': res}
             })
             .catch((error) => {
                 console.error('Email sent ERROR: ', error)
-                result = "Email sent ERROR"
+                result = {"Email sent ERROR": error}
             })
         return result
     }
