@@ -1,7 +1,4 @@
-const abc = {
-	"email": {
-		"Email sent": []
-	},
+export = {
 	"annotateResult": [
 		{
 			"faceAnnotations": [],
