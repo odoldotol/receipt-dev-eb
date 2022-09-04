@@ -19,7 +19,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "study": "ts-node src/googleVisionAnnoStudy/googleVisionAnnotationStudy.ts"
+    "study": "ts-node src/googleVisionAnnoStudy/googleVisionAnnotationStudy.ts",
+    "study:get": "ts-node src/googleVisionAnnoStudy/getValue.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^2.4.2",
