@@ -239,40 +239,24 @@ const getFulltextAnnoObjByRange = (rangeX/*[overX, underX]*/, rangeY/*[overY, un
 }
 
 // 상품명
-const productNameGroup = getFulltextAnnoObjByRange([0,242], [143,395], false)
-
-productNameGroup.sort((a,b) => {
-    const aVerticesY = a[1].boundingBox.vertices.map((v) => v.y)
-    const bVerticesY = b[1].boundingBox.vertices.map((v) => v.y)
-    return Math.min(...aVerticesY) - Math.min(...bVerticesY)
-})
+const productNameGroup = sortGroupAscByY(
+    getFulltextAnnoObjByRange([0,242], [143,395], false)
+);
 
 // 단가
-const unitPriceGroup = getFulltextAnnoObjByRange([242,271], [143,395], false, {includeWords: true, word: 1})
-
-unitPriceGroup.sort((a,b) => {
-    const aVerticesY = a[1].boundingBox.vertices.map((v) => v.y)
-    const bVerticesY = b[1].boundingBox.vertices.map((v) => v.y)
-    return Math.min(...aVerticesY) - Math.min(...bVerticesY)
-})
+const unitPriceGroup = sortGroupAscByY(
+    getFulltextAnnoObjByRange([242,271], [143,395], false, {includeWords: true, word: 1})
+);
 
 // 수량
-const quantityGroup = getFulltextAnnoObjByRange([271,295], [143,395], false)
-
-quantityGroup.sort((a,b) => {
-    const aVerticesY = a[1].boundingBox.vertices.map((v) => v.y)
-    const bVerticesY = b[1].boundingBox.vertices.map((v) => v.y)
-    return Math.min(...aVerticesY) - Math.min(...bVerticesY)
-})
+const quantityGroup = sortGroupAscByY(
+    getFulltextAnnoObjByRange([271,295], [143,395], false)
+);
 
 // 금액
-const amountGroup = getFulltextAnnoObjByRange([295,333], [143,395], false, {includeWords: true, word: 1})
-
-amountGroup.sort((a,b) => {
-    const aVerticesY = a[1].boundingBox.vertices.map((v) => v.y)
-    const bVerticesY = b[1].boundingBox.vertices.map((v) => v.y)
-    return Math.min(...aVerticesY) - Math.min(...bVerticesY)
-})
+const amountGroup = sortGroupAscByY(
+    getFulltextAnnoObjByRange([295,333], [143,395], false, {includeWords: true, word: 1})
+);
 
 /**
  * 그룹을 word 나 paragraph 단위로 만들어놔야한다고 생각해봤다.
@@ -302,3 +286,11 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
 
 console.log(productNameGroup)
 
+
+function sortGroupAscByY(group) {
+    return group.sort((a,b) => {
+        const aVerticesY = a[1].boundingBox.vertices.map((v) => v.y)
+        const bVerticesY = b[1].boundingBox.vertices.map((v) => v.y)
+        return Math.min(...aVerticesY) - Math.min(...bVerticesY)
+    })
+}
