@@ -266,25 +266,76 @@ const amountGroup = sortGroupAscByY(
  * 어차피 블록으로 찾아진것과 같은 문제는 존재한다. 오히려 더 복잡해질 수 있다.
  */
 
-// y축에대해 내림차순으로 정령한 상태에서 각 항목의 위치정보를 쓰지말고 갯수 비교해서 맞으면 순서대로 매칭시켜주면 될거같다!
 // console.log(productNameGroup.length)
 // console.log(unitPriceGroup.length)
 // console.log(quantityGroup.length)
 // console.log(amountGroup.length)
 /**
- * 갯수비교
- * 행사할인 : 단가 -1, 수량 -1
- * 쿠폰할인 : 수량 -1
- * 사실 어차피 text 만 뺴내서 배열로 만들면 매우 편하다. 그러니 갯수를 비교하면서 새로운 배열을 만들어서 갯수체크통과여부와 함께 반환시켜버리자.
+ * undefined
+ * 행사할인 : 단가, 수량
+ * 쿠폰할인 : 수량
+ * 상품명 갯수 = 금액 갯수 이고 단가와 수량은 빈곳 존재하기때문에 갯수 모잘란다.
+ * 우리는 row 갯수만큼의 길이를 가지는 배열들로 모든 그룹을 전환해주면 된다.
+ * 이때 undefined 를 빈곳에 잘 넣어주기만 하면 된다.
  */
-function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup, amountGroup) {
-    // /\n./ 이 있으면 +1 해서 갯수 찾기
-    const reg = /\n./
-    // productNameGroup 순회하며 갯수파악. 동시에 행사할인|쿠폰할인 발견하면 체킹하기
-}
+const getTextArraysFromGroups = (productNameGroup, unitPriceGroup, quantityGroup, amountGroup) => {
+    // 각 Group 순회하며 Arr 만들기 (\n 기준으로 split 해서 배열로 만들어준다.)
+    const productNameArray = makeArrFromGroup(productNameGroup);
+    const unitPriceArray = makeArrFromGroup(unitPriceGroup);
+    const quantityArray = makeArrFromGroup(quantityGroup);
+    const amountArray = makeArrFromGroup(amountGroup);
+    // 상품명 arr 에서 행사할인|쿠폰할인 들의 index 로 단가 수량 arr 에 undefined 삽입
+    productNameArray.forEach((productName, index) => {
+        if (productName.includes("행사할인")) {
+            unitPriceArray.splice(index, 0, undefined);
+            quantityArray.splice(index, 0, undefined);
+        }
+        else if (productName.includes("쿠폰할인")) {
+            quantityArray.splice(index, 0, undefined);
+        }
+    })
+    // 4개의 배열의 길이가 모두 같으면 정상임. 정상이면 완성된 배열들 리턴
+    if (
+        productNameArray.length === unitPriceArray.length &&
+        unitPriceArray.length === quantityArray.length &&
+        quantityArray.length === amountArray.length
+    ) {
+        return {productNameArray, unitPriceArray, quantityArray, amountArray};
+    }
+    else {
+        return null;
+    }
 
+    function makeArrFromGroup(group) {
+        let arr = []
+        group.forEach((item) => {
+            item[1].textStudy.split('\n').forEach((text) => { // textStudy 그냥 전부 text 로 통일하는게 좋지 않을까?
+                if (text !== '') {
+                    arr.push(text)
+                }
+            })
+        })
+        return arr
+    };
+};
 
-console.log(productNameGroup)
+const textArrays = getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup, amountGroup)
+
+// 다듬기
+// 상품명: 숫자 두개로 시작하면 숫자 두개 제거 => 공백으로 시작하거나 공백으로 끝나면 공백 제거
+// 나머지: 공백으로 시작하거나 공백으로 끝나면 공백 제거
+const productNameArr = deleteSpacesEachEleOfFrontAndBackInArr(deleteStartingTwoNumbersEachEleInArr(textArrays.productNameArray));
+const unitPriceArr = deleteSpacesEachEleOfFrontAndBackInArr(textArrays.unitPriceArray);
+const quantityArr = deleteSpacesEachEleOfFrontAndBackInArr(textArrays.quantityArray);
+const amountArr = deleteSpacesEachEleOfFrontAndBackInArr(textArrays.amountArray);
+
+// . 이나 * 으로 시작하는 상품명은 부가세 면세제품이다. 이 부분은 일단은 스킵한다.
+
+console.log(productNameArr)
+console.log(unitPriceArr)
+console.log(quantityArr)
+console.log(amountArr)
+
 
 
 function sortGroupAscByY(group) {
@@ -292,5 +343,20 @@ function sortGroupAscByY(group) {
         const aVerticesY = a[1].boundingBox.vertices.map((v) => v.y)
         const bVerticesY = b[1].boundingBox.vertices.map((v) => v.y)
         return Math.min(...aVerticesY) - Math.min(...bVerticesY)
+    })
+}
+
+function deleteStartingTwoNumbersEachEleInArr(arr) {
+    return arr.map((ele) => {
+        return ele.replace(/^[0-9]{2}/, '')
+    })
+}
+
+function deleteSpacesEachEleOfFrontAndBackInArr(arr) {
+    return arr.map((ele) => {
+        if (ele === undefined) {
+            return undefined
+        }
+        return ele.replace(/^[ ]+|[ ]+$/g, '')
     })
 }
