@@ -339,10 +339,11 @@ const amountArr = deleteAllCommaEachEleInArr(
 
 // . 이나 * 으로 시작하는 상품명은 부가세 면세제품이다. 이 부분은 일단은 스킵한다.
 
-console.log(productNameArr)
-console.log(unitPriceArr)
-console.log(quantityArr)
-console.log(amountArr)
+
+// console.log(productNameArr)
+// console.log(unitPriceArr)
+// console.log(quantityArr)
+// console.log(amountArr)
 
 
 
@@ -456,7 +457,7 @@ const makeReceiptItemArray = (productNameArr, unitPriceArr, quantityArr, amountA
         else {
         // . 으로 시작하는것 발견하면 taxExemption = true 주고 . 제거하고 space 제거하기
             let taxExemption = false;
-            if (productName[0] === ".") {
+            if (productName.charAt(0) === ".") {
                 productName = productName.replace(/^./, '').replace(/^[ ]+/g, '')
                 taxExemption = true;
             }
@@ -477,4 +478,5 @@ const makeReceiptItemArray = (productNameArr, unitPriceArr, quantityArr, amountA
 }
 
 const receiptItemArray = makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountArr)
+
 console.log(receiptItemArray)
