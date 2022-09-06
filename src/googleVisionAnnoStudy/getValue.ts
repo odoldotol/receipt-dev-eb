@@ -122,6 +122,107 @@ const getFulltextAnnoObjByReg = (pin) => {
 
 
 // 어찌어찌 y 143 초과 493 | 394 미만인 것들을 찾으면 된다고 결론 났다고 치자
+
+/**
+ * 영수증 위치해석 & 읽을 text 위치 결정
+ * Ver 0.0.1
+ * 
+ * <조건>
+ * 영수증은 거의 수평으로 활영되었음
+ * 상품명 단가 수령 금액 간의 수평거리는 어떠한 다른 요소들과의 수평거리보다 가까움
+ * 상품명 단가 수량 금액 모두 정확히 찾아냈음(비록 오답인 요소가 함께 찾아졌을지라도)
+ * 위에서 말한 오답인 요소는 정답요소와 수평위치에 있을 수 없음
+ * 표시 상품은 부가세 면세품목입니다 를 정확히 하나만 찾아냈음 (굉장히 편한, 매우 위험한 가정)
+ * 
+ * 1. 상품명 단가 수량 금액 라인 찾기
+ * 2. 표시 상품은 부가세 면세품목입니다 부분 찾기
+ * 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
+ * 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
+ */
+const findItemRange = () => {
+
+    // 1. 상품명 단가 수량 금액 라인 찾기
+    const productName = getFulltextAnnoObjByReg(/상품명/)
+    const unitPrice = getFulltextAnnoObjByReg(/단가/)
+    const quantity = getFulltextAnnoObjByReg(/수량/)
+    const amount = getFulltextAnnoObjByReg(/금액/)
+
+    let productNameIndex: number;
+    let unitPriceIndex: number;
+    let quantityIndex: number;
+    let amountIndex: number;
+
+    let unitPriceAverageY: number;
+    let quantityAverageY: number;
+    
+    // 상품명과 단가를 비교하여 세로축이 가장 인접한것 매칭
+    let difference = 999;
+    productName.forEach((productNameEle, productNameEleIdx) => {
+        unitPrice.forEach((unitPriceEle, unitPriceEleIdx) => {
+            const productNameEleAverageY = productNameEle[1].boundingBox.vertices.reduce((acc, cur) => acc + cur.y, 0) / 4
+            const unitPriceEleAverageY = unitPriceEle[1].boundingBox.vertices.reduce((acc, cur) => acc + cur.y, 0) / 4
+            const newDifference = Math.abs(productNameEleAverageY - unitPriceEleAverageY)
+            if (newDifference < difference) {
+                difference = newDifference
+                productNameIndex = productNameEleIdx
+                unitPriceIndex = unitPriceEleIdx
+                unitPriceAverageY = unitPriceEleAverageY
+            }
+        })
+    });
+
+    // 단가를 기준으로 세로축방향으로 가장 인접한 수량 찾기
+    difference = 999;
+    quantity.forEach((quantityEle, quantityEleIdx) => {
+        const quantityEleAverageY = quantityEle[1].boundingBox.vertices.reduce((acc, cur) => acc + cur.y, 0) / 4
+        const newDifference = Math.abs(unitPriceAverageY - quantityEleAverageY)
+        if (newDifference < difference) {
+            difference = newDifference
+            quantityIndex = quantityEleIdx
+            quantityAverageY = quantityEleAverageY
+        }
+    });
+
+    // 수량을 기준으로 세로축방향으로 가장 인접한 금액 찾기
+    difference = 999;
+    amount.forEach((amountEle, amountEleIdx) => {
+        const amountEleAverageY = amountEle[1].boundingBox.vertices.reduce((acc, cur) => acc + cur.y, 0) / 4
+        const newDifference = Math.abs(quantityAverageY - amountEleAverageY)
+        if (newDifference < difference) {
+            difference = newDifference
+            amountIndex = amountEleIdx
+        }
+    });
+
+    // 2. 표시 상품은 부가세 면세품목입니다 부분 찾기
+    const taxExemptionMsg = getFulltextAnnoObjByReg(/표시 상품은 부가세 면세품목입니다/)
+
+    // 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
+    const productNameYs = productName[productNameIndex][1].boundingBox.vertices.map((v) => v.y)
+    const unitPriceYs = unitPrice[unitPriceIndex][1].boundingBox.vertices.map((v) => v.y)
+    const quantityYs = quantity[quantityIndex][1].boundingBox.vertices.map((v) => v.y)
+    const amountYs = amount[amountIndex][1].boundingBox.vertices.map((v) => v.y)
+    const minY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
+    // maxY 는 taxExemptionMsg의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
+    const maxY = taxExemptionMsg[0][1].boundingBox.vertices.map(v => v.y).sort((a, b) => a - b)[1]
+
+    // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
+    const unitPriceAverageX = unitPrice[unitPriceIndex][1].boundingBox.vertices.reduce((acc, cur) => acc + cur.x, 0) / 4
+    const textAnnotationsMinX = Math.min(...textAnnotations[0].boundingPoly.vertices.map((v) => v.x))
+    const productNameRangeX = [textAnnotationsMinX,unitPriceAverageX]
+    const quantityMinX = Math.min(...quantity[quantityIndex][1].boundingBox.vertices.map((v) => v.x))
+    const unitPriceRangeX = [unitPriceAverageX,quantityMinX]
+    const quantityMaxX = Math.max(...quantity[quantityIndex][1].boundingBox.vertices.map((v) => v.x))
+    const amountMinX = Math.min(...amount[amountIndex][1].boundingBox.vertices.map((v) => v.x))
+    const quantityRangeX = [quantityMinX,(quantityMaxX+amountMinX)/2]
+    const amountMaxX = Math.max(...amount[amountIndex][1].boundingBox.vertices.map((v) => v.x))
+    const amountRangeX = [amountMinX,amountMaxX]
+    const itemRangeY = [minY,maxY]
+
+    return {productNameRangeX, unitPriceRangeX, quantityRangeX, amountRangeX, itemRangeY}
+};
+
+
 /**
  * 완전 속해있으면 반환하고 걸쳐있으면 탐구하고 아예 안걸쳐있으면 패스하는 탐색 <주의> 페이지 1개인 경우만 고려되었음
  */
@@ -238,24 +339,26 @@ const getFulltextAnnoObjByRange = (rangeX/*[overX, underX]*/, rangeY/*[overY, un
     return result
 }
 
+const {productNameRangeX, unitPriceRangeX, quantityRangeX, amountRangeX, itemRangeY} = findItemRange()
+
 // 상품명
 const productNameGroup = sortGroupAscByY(
-    getFulltextAnnoObjByRange([0,242], [143,395], false)
+    getFulltextAnnoObjByRange(productNameRangeX, itemRangeY, false)
 );
 
 // 단가
 const unitPriceGroup = sortGroupAscByY(
-    getFulltextAnnoObjByRange([242,271], [143,395], false, {includeWords: true, word: 1})
+    getFulltextAnnoObjByRange(unitPriceRangeX, itemRangeY, false, {includeWords: true, word: 1})
 );
 
 // 수량
 const quantityGroup = sortGroupAscByY(
-    getFulltextAnnoObjByRange([271,295], [143,395], false)
+    getFulltextAnnoObjByRange(quantityRangeX, itemRangeY, false)
 );
 
 // 금액
 const amountGroup = sortGroupAscByY(
-    getFulltextAnnoObjByRange([295,333], [143,395], false, {includeWords: true, word: 1})
+    getFulltextAnnoObjByRange(amountRangeX, itemRangeY, false, {includeWords: true, word: 1})
 );
 
 /**
@@ -380,7 +483,7 @@ function deleteAllCommaEachEleInArr(arr) {
 };
 
 
-// 항목객체 만들기
+// 항목객체 영수증객체 만들기
 class Discount {
     constructor(
         public name: string,
@@ -442,6 +545,9 @@ class Receipt {
     }
 }
 
+/**
+ * 항목객체 배열 만들기
+ */
 const makeReceiptItemArray = (productNameArr, unitPriceArr, quantityArr, amountArr):ReceiptItem[] => {
     const receiptItemArray = [];
     productNameArr.forEach((productName, idx) => {
@@ -475,8 +581,8 @@ const makeReceiptItemArray = (productNameArr, unitPriceArr, quantityArr, amountA
         };
     });
     return receiptItemArray
-}
+};
 
-const receiptItemArray = makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountArr)
+const receiptItemArray = makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountArr);
 
 console.log(receiptItemArray)
