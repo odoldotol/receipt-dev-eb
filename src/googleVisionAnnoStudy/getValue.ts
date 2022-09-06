@@ -322,12 +322,20 @@ const getTextArraysFromGroups = (productNameGroup, unitPriceGroup, quantityGroup
 const textArrays = getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup, amountGroup)
 
 // 다듬기
-// 상품명: 숫자 두개로 시작하면 숫자 두개 제거 => 공백으로 시작하거나 공백으로 끝나면 공백 제거
-// 나머지: 공백으로 시작하거나 공백으로 끝나면 공백 제거
-const productNameArr = deleteSpacesEachEleOfFrontAndBackInArr(deleteStartingTwoNumbersEachEleInArr(textArrays.productNameArray));
-const unitPriceArr = deleteSpacesEachEleOfFrontAndBackInArr(textArrays.unitPriceArray);
-const quantityArr = deleteSpacesEachEleOfFrontAndBackInArr(textArrays.quantityArray);
-const amountArr = deleteSpacesEachEleOfFrontAndBackInArr(textArrays.amountArray);
+// 상품명: 숫자 두개로 시작하면 숫자 두개 제거, 공백으로 시작하거나 공백으로 끝나면 공백 제거
+// 나머지: 공백으로 시작하거나 공백으로 끝나면 공백 제거, 쉼표+숫자+숫자+숫자 발견시 쉼표 제거(그냥 모든쉼표 제거로 대체)
+const productNameArr = deleteSpacesEachEleOfFrontAndBackInArr(
+    deleteStartingTwoNumbersEachEleInArr(textArrays.productNameArray)
+);
+const unitPriceArr = deleteAllCommaEachEleInArr(
+    deleteSpacesEachEleOfFrontAndBackInArr(textArrays.unitPriceArray)
+);
+const quantityArr = deleteAllCommaEachEleInArr(
+    deleteSpacesEachEleOfFrontAndBackInArr(textArrays.quantityArray)
+);
+const amountArr = deleteAllCommaEachEleInArr(
+    deleteSpacesEachEleOfFrontAndBackInArr(textArrays.amountArray)
+);
 
 // . 이나 * 으로 시작하는 상품명은 부가세 면세제품이다. 이 부분은 일단은 스킵한다.
 
@@ -344,13 +352,13 @@ function sortGroupAscByY(group) {
         const bVerticesY = b[1].boundingBox.vertices.map((v) => v.y)
         return Math.min(...aVerticesY) - Math.min(...bVerticesY)
     })
-}
+};
 
 function deleteStartingTwoNumbersEachEleInArr(arr) {
     return arr.map((ele) => {
         return ele.replace(/^[0-9]{2}/, '')
     })
-}
+};
 
 function deleteSpacesEachEleOfFrontAndBackInArr(arr) {
     return arr.map((ele) => {
@@ -359,4 +367,114 @@ function deleteSpacesEachEleOfFrontAndBackInArr(arr) {
         }
         return ele.replace(/^[ ]+|[ ]+$/g, '')
     })
+};
+
+function deleteAllCommaEachEleInArr(arr) {
+    return arr.map((ele) => {
+        if (ele === undefined) {
+            return undefined
+        }
+        return ele.replace(/,/g, '')
+    })
+};
+
+
+// 항목객체 만들기
+class Discount {
+    constructor(
+        public name: string,
+        public amount: number,
+        public code?: number
+    ) {}
 }
+class ItemReadFromReceipt {
+    constructor(
+        public productName: string,
+        public unitPrice: number,
+        public quantity: number,
+        public amount: number,
+        public taxExemption?: boolean,
+    ) {}
+    public discountArray: Discount[] = [];
+}
+class ReceiptItem {
+    constructor(
+        public readFromReceipt: ItemReadFromReceipt,
+        public category?: string
+    ) {}
+    public purchaseAmount: number;
+    /**
+     * discount 추가하기
+    */
+    addDiscount(discount: Discount) {
+        this.readFromReceipt.discountArray.push(discount)
+    }
+}
+class ReceiptReadFromReceipt {
+    constructor(
+        //시간
+        //총가격
+        //할인
+        //결제
+    ) {}
+}
+class Provider {
+    constructor(
+        // 이메일?
+    ) {}
+}
+class OutputRequest {
+    constructor(
+        // 언제 어떤방식으로 어디로, 실행.성공여부?
+    ) {}
+}
+class Receipt {
+    constructor(
+        public provider: Provider,
+        public itemArray: ReceiptItem[],
+        public readFromReceipt: ReceiptReadFromReceipt,
+        public userInput?,
+        public outputRequests?: OutputRequest[],
+        public imageAddress?: string,
+    ) {
+        // purchaseAmount 계산하기
+    }
+}
+
+const makeReceiptItemArray = (productNameArr, unitPriceArr, quantityArr, amountArr):ReceiptItem[] => {
+    const receiptItemArray = [];
+    productNameArr.forEach((productName, idx) => {
+        // 행사할인, 쿠폰할인 발견하면 Discount 객체 만들어서 바로 전 아이템에 넣어주기
+        if (productName.includes("행사할인")) {
+            const discount = new Discount(productName, amountArr[idx])
+            receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
+        }
+        else if (productName.includes("쿠폰할인")) {
+            const discount = new Discount(productName, amountArr[idx], unitPriceArr[idx])
+            receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
+        }
+        else {
+        // . 으로 시작하는것 발견하면 taxExemption = true 주고 . 제거하고 space 제거하기
+            let taxExemption = false;
+            if (productName[0] === ".") {
+                productName = productName.replace(/^./, '').replace(/^[ ]+/g, '')
+                taxExemption = true;
+            }
+            receiptItemArray.push(
+                new ReceiptItem(
+                    new ItemReadFromReceipt(
+                        productName,
+                        unitPriceArr[idx],
+                        quantityArr[idx],
+                        amountArr[idx],
+                        taxExemption
+                    )
+                )
+            );
+        };
+    });
+    return receiptItemArray
+}
+
+const receiptItemArray = makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountArr)
+console.log(receiptItemArray)
