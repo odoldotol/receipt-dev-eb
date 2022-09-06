@@ -120,9 +120,6 @@ const getFulltextAnnoObjByReg = (pin) => {
 // console.log(getFulltextAnnoObjByReg(/구매금액/))
 // console.log(getFulltextAnnoObjByReg(/표시 상품은 부가세 면세품목입니다/)[0][1].boundingBox.vertices)
 
-
-// 어찌어찌 y 143 초과 493 | 394 미만인 것들을 찾으면 된다고 결론 났다고 치자
-
 /**
  * 영수증 위치해석 & 읽을 text 위치 결정
  * Ver 0.0.1
