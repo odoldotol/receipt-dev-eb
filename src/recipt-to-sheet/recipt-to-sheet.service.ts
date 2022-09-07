@@ -41,40 +41,48 @@ export class ReciptToSheetService {
         return result
     }
 
-    createAttachments(textArr, sheetFormat) {
+    createAttachments(receiptObject, sheetFormat) {
         let attachment
         if (sheetFormat === 'csv') {
-            let csvData = "0,1,2,3,4,5,6,7,8,9\n"
-            textArr[0] = '"'+textArr[0]+'"'
-            const textData = textArr.reduce((acc, cur, idx) => {
-                if (idx%10 === 9) {
-                    return acc +','+ '"' + cur+ '"' + '\n'
-                }
-                else if (idx!==0 && idx%10 === 0) {
-                    return acc + '"' + cur + '"'
-                }
-                else {
-                    return acc +','+ '"' + cur + '"'
-                }
-            })
-            csvData += textData
-            attachment = Buffer.from(csvData, 'utf8').toString('base64');
+            // let csvData = "0,1,2,3,4,5,6,7,8,9\n"
+            // textArr[0] = '"'+textArr[0]+'"'
+            // const textData = textArr.reduce((acc, cur, idx) => {
+            //     if (idx%10 === 9) {
+            //         return acc +','+ '"' + cur+ '"' + '\n'
+            //     }
+            //     else if (idx!==0 && idx%10 === 0) {
+            //         return acc + '"' + cur + '"'
+            //     }
+            //     else {
+            //         return acc +','+ '"' + cur + '"'
+            //     }
+            // })
+            // csvData += textData
+            // attachment = Buffer.from(csvData, 'utf8').toString('base64');
         }
-        else { // xlsx
-            // let arr = [ 임시 정렬포멧 예
-            //     {0: textArr[0], 1:textArr[1], 2:textArr[2], 3:textArr[3], 4:textArr[4], 5:textArr[5], 6:textArr[6], 7:textArr[7], 8:textArr[8], 9:textArr[9]},
-            //     {0: textArr[10], 1:textArr[11], 2:textArr[12], 3:textArr[13], 4:textArr[14], 5:textArr[15], 6:textArr[16], 7:textArr[17], 8:textArr[18], 9:textArr[19]},
-            //     {0: textArr[20], 1:textArr[21], 2:textArr[22], 3:textArr[23], 4:textArr[24], 5:textArr[25], 6:textArr[26], 7:textArr[27], 8:textArr[28], 9:textArr[29]},
-            // ]
-            let tempArr = Array.from({length: Math.floor(textArr.length/10)+1}, () => {return {}})
-            textArr.forEach((text, idx) => {
-                tempArr[Math.floor(idx/10)][idx%10] = text
-            })
+        else if (sheetFormat === 'xlsx') { // xlsx
+
+            const rowObjArr = receiptObject.itemArray.map((item, idx) => {
+                return {
+                    'no': idx+1,
+                    '상품명': item.readFromReceipt.productName,
+                    '단가': item.readFromReceipt.unitPrice,
+                    '수량': item.readFromReceipt.quantity,
+                    '금액': item.readFromReceipt.amount,
+                    '할인': item.readFromReceipt.discountArray.reduce((acc, cur) => acc + cur.amount, 0), // 후에, 영수증 객체 자체에 할인summary 같은걸 넣고 이부분 수정하자
+                    '구매금액': item.purchaseAmount,
+                    '카테고리': item.category,
+                    '부가세면세': item.readFromReceipt.taxExemption,
+                }
+            });
+
             const wb = xlsx.utils.book_new()
-            const ws = xlsx.utils.json_to_sheet(tempArr)
+            const ws = xlsx.utils.json_to_sheet(rowObjArr)
+
             xlsx.utils.book_append_sheet(wb, ws, "somewhen-someMart") // 결제일, 마트
             attachment = xlsx.write(wb, {type: 'base64', bookType: 'xlsx'})
-        }
+        };
+
         return [{
             content: attachment,
             filename: "somewhen-someMart." + sheetFormat, // 결제일, 마트, 시트포멧 // 복수의 이미지를 처리하게되면 신청일+???.xlsx ??
@@ -129,16 +137,16 @@ export class ReciptToSheetService {
         console.log(receiptObject)
 
         // Sheet 만들기 (csv | xlsx) -> attachments 만들기
-        // const attachments = this.createAttachments(receiptObject, multipartBody.sheetFormat);
+        const attachments = this.createAttachments(receiptObject, multipartBody.sheetFormat);
         
         // 이메일 보내기
-        // const email = await this.sendEmail(attachments, multipartBody.emailAddress);
+        const email = await this.sendEmail(attachments, multipartBody.emailAddress);
         
         /* 몽고디비에 저장하기 (optional, potentially essential)
             항목 객체들이 담긴 배열과 그밖의 필요 데이터들을 도큐먼트로 저장하면된다.
             email 전송 성공여부도 저장된다.
         */
 
-        // return {email,annotateResult}; // 앞의 모든 프로세스에 대한 결과나 상태를 알 수 있는 객체를 반환하기
+        return {email,annotateResult}; // 앞의 모든 프로세스에 대한 결과나 상태를 알 수 있는 객체를 반환하기
     }
 };
