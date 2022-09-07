@@ -4,6 +4,9 @@ import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
+import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
+import getReceiptObject from '../receiptObj/get.V0.0.1';
+import { MultipartBodyDto } from './dto/multipartBody.dto';
 
 @Injectable()
 export class ReciptToSheetService {
@@ -104,7 +107,7 @@ export class ReciptToSheetService {
         return result
     }
 
-    async processingTransferredReceipt(reciptImage: Express.Multer.File, multipartBody) {
+    async processingTransferredReceipt(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
 
         // 영수증인지 확인하기 (optional, potentially essential)
 
@@ -113,29 +116,29 @@ export class ReciptToSheetService {
         // 구글 비젼 API 돌리기
         const annotateResult = await this.annotateImage(reciptImage);
 
-        // 데이터 추출
+        // 데이터 추출하고 영수증객체 만들기
             /*
-            항목객체 들을 최대한 정확히 만들어내면 된다.
-            
-            1. 어디 영수증인지 알아내기 -> 이 부분 무시하고 홈플러스 라고 가정
-            
-            2. 필요한 문자열들만 추출 (마트별 솔루션 개발 필요) -> 홈플러스 솔루션 적용
+            1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
+            2. 홈플러스 솔루션으로 text 추출하여 영수증갹체 만들기
             */
-            // test ----------------
-        const textArr = annotateResult[0].textAnnotations.map(textObj => textObj.description);
-        textArr.shift();
-            // test ----------------
+        const receiptObject = getReceiptObject(
+            googleVisionAnnoInspectorPipe(annotateResult),
+            multipartBody
+        );
 
-        /* 몽고디비에 저장하기 (optional, potentially essential)
-            항목 객체들이 담긴 배열과 그밖의 필요 데이터들을 도큐먼트로 저장하면된다.
-        */
+        console.log(receiptObject)
 
         // Sheet 만들기 (csv | xlsx) -> attachments 만들기
-        const attachments = this.createAttachments(textArr, multipartBody.sheetFormat)
-
-        // 이메일 보내기
-        const email = await this.sendEmail(attachments, multipartBody.emailAddress);
+        // const attachments = this.createAttachments(receiptObject, multipartBody.sheetFormat);
         
-        return {email,annotateResult}; // 앞의 모든 프로세스에 대한 결과나 상태를 알 수 있는 객체를 반환하기
+        // 이메일 보내기
+        // const email = await this.sendEmail(attachments, multipartBody.emailAddress);
+        
+        /* 몽고디비에 저장하기 (optional, potentially essential)
+            항목 객체들이 담긴 배열과 그밖의 필요 데이터들을 도큐먼트로 저장하면된다.
+            email 전송 성공여부도 저장된다.
+        */
+
+        // return {email,annotateResult}; // 앞의 모든 프로세스에 대한 결과나 상태를 알 수 있는 객체를 반환하기
     }
-}
+};
