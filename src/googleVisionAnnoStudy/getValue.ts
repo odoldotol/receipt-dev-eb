@@ -22,7 +22,7 @@ const fullTextAnnotation = annotateResult[0].fullTextAnnotation
  * 줄바꿈이나 긴공백으로 끝남
  */
 
-class idx {
+class idx { // 해석, 디버그 편의성을 위한놈
     constructor(
         public pageIdx: number,
         public blockIdx?: number,
@@ -156,8 +156,8 @@ const findItemRange = () => {
     let difference = 999;
     productName.forEach((productNameEle, productNameEleIdx) => {
         unitPrice.forEach((unitPriceEle, unitPriceEleIdx) => {
-            const productNameEleAverageY = productNameEle[1].boundingBox.vertices.reduce((acc, cur) => acc + cur.y, 0) / 4
-            const unitPriceEleAverageY = unitPriceEle[1].boundingBox.vertices.reduce((acc, cur) => acc + cur.y, 0) / 4
+            const productNameEleAverageY = calAverageXorY(productNameEle, "y")
+            const unitPriceEleAverageY = calAverageXorY(unitPriceEle, "y")
             const newDifference = Math.abs(productNameEleAverageY - unitPriceEleAverageY)
             if (newDifference < difference) {
                 difference = newDifference
@@ -171,7 +171,7 @@ const findItemRange = () => {
     // 단가를 기준으로 세로축방향으로 가장 인접한 수량 찾기
     difference = 999;
     quantity.forEach((quantityEle, quantityEleIdx) => {
-        const quantityEleAverageY = quantityEle[1].boundingBox.vertices.reduce((acc, cur) => acc + cur.y, 0) / 4
+        const quantityEleAverageY = calAverageXorY(quantityEle, "y")
         const newDifference = Math.abs(unitPriceAverageY - quantityEleAverageY)
         if (newDifference < difference) {
             difference = newDifference
@@ -183,7 +183,7 @@ const findItemRange = () => {
     // 수량을 기준으로 세로축방향으로 가장 인접한 금액 찾기
     difference = 999;
     amount.forEach((amountEle, amountEleIdx) => {
-        const amountEleAverageY = amountEle[1].boundingBox.vertices.reduce((acc, cur) => acc + cur.y, 0) / 4
+        const amountEleAverageY = calAverageXorY(amountEle, "y")
         const newDifference = Math.abs(quantityAverageY - amountEleAverageY)
         if (newDifference < difference) {
             difference = newDifference
@@ -195,28 +195,42 @@ const findItemRange = () => {
     const taxExemptionMsg = getFulltextAnnoObjByReg(/표시 상품은 부가세 면세품목입니다/)
 
     // 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
-    const productNameYs = productName[productNameIndex][1].boundingBox.vertices.map((v) => v.y)
-    const unitPriceYs = unitPrice[unitPriceIndex][1].boundingBox.vertices.map((v) => v.y)
-    const quantityYs = quantity[quantityIndex][1].boundingBox.vertices.map((v) => v.y)
-    const amountYs = amount[amountIndex][1].boundingBox.vertices.map((v) => v.y)
+    const productNameYs = getXorYArr(productName[productNameIndex], "y")
+    const unitPriceYs = getXorYArr(unitPrice[unitPriceIndex], "y")
+    const quantityYs = getXorYArr(quantity[quantityIndex], "y")
+    const amountYs = getXorYArr(amount[amountIndex], "y")
     const minY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
     // maxY 는 taxExemptionMsg의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
-    const maxY = taxExemptionMsg[0][1].boundingBox.vertices.map(v => v.y).sort((a, b) => a - b)[1]
+    const maxY = getXorYArr(taxExemptionMsg[0], "y")
+        .sort((a, b) => a - b)[1]
 
     // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
-    const unitPriceAverageX = unitPrice[unitPriceIndex][1].boundingBox.vertices.reduce((acc, cur) => acc + cur.x, 0) / 4
-    const textAnnotationsMinX = Math.min(...textAnnotations[0].boundingPoly.vertices.map((v) => v.x))
+    const unitPriceAverageX = calAverageXorY(unitPrice[unitPriceIndex], "x")
+    const textAnnotationsMinX = Math.min(...getXorYArr(textAnnotations[0], "x", true))
     const productNameRangeX = [textAnnotationsMinX,unitPriceAverageX]
-    const quantityMinX = Math.min(...quantity[quantityIndex][1].boundingBox.vertices.map((v) => v.x))
+    const quantityMinX = Math.min(...getXorYArr(quantity[quantityIndex], "x"))
     const unitPriceRangeX = [unitPriceAverageX,quantityMinX]
-    const quantityMaxX = Math.max(...quantity[quantityIndex][1].boundingBox.vertices.map((v) => v.x))
-    const amountMinX = Math.min(...amount[amountIndex][1].boundingBox.vertices.map((v) => v.x))
+    const quantityMaxX = Math.max(...getXorYArr(quantity[quantityIndex], "x"))
+    const amountMinX = Math.min(...getXorYArr(amount[amountIndex], "x"))
     const quantityRangeX = [quantityMinX,(quantityMaxX+amountMinX)/2]
-    const amountMaxX = Math.max(...amount[amountIndex][1].boundingBox.vertices.map((v) => v.x))
+    const amountMaxX = Math.max(...getXorYArr(amount[amountIndex], "x"))
     const amountRangeX = [amountMinX,amountMaxX]
     const itemRangeY = [minY,maxY]
 
     return {productNameRangeX, unitPriceRangeX, quantityRangeX, amountRangeX, itemRangeY}
+
+    function calAverageXorY(fullTextAnooObj, coordinate:"x"|"y") {
+        return fullTextAnooObj[1].boundingBox.vertices.reduce((acc, cur) => acc + cur[coordinate], 0) / 4
+    }
+
+    function getXorYArr(AnnoObj, coordinate:"x"|"y", isTextAnno?) {
+        if (isTextAnno === true) {
+            return AnnoObj.boundingPoly.vertices.map((v) => v[coordinate])
+        }
+        else {
+            return AnnoObj[1].boundingBox.vertices.map((v) => v[coordinate])
+        }
+    }
 };
 
 
