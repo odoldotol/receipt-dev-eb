@@ -1,4 +1,4 @@
-import { Equals, IsEmail, IsNotEmpty } from "class-validator";
+import { Equals, IsEmail, IsIn, IsNotEmpty } from "class-validator";
 
 export class MultipartBodyDto {
     
@@ -6,7 +6,7 @@ export class MultipartBodyDto {
     @IsNotEmpty()
     readonly emailAddress: string;
     
-    @Equals("xlsx"||"csv")
+    @IsIn(["xlsx","csv"])
     readonly sheetFormat: string;
 
 };
