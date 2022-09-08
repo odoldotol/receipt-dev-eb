@@ -421,17 +421,17 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
 
     // 상품명 arr 에서 특정상품명이 발견되는 index 로 단가 수량 arr 에 undefined 삽입
     productNameArray.forEach((productName, index) => {
-        if (productName.includes("행사할인"&&"카드할인")) {
+        if (productName.includes("행사할인")) {
             unitPriceArray.splice(index, 0, undefined);
             quantityArray.splice(index, 0, undefined);
         }
         else if (productName.includes("쿠폰할인")) {
             quantityArray.splice(index, 0, undefined);
         }
-        // else if (productName.includes("카드할인")) {
-        //     unitPriceArray.splice(index, 0, undefined);
-        //     quantityArray.splice(index, 0, undefined);
-        // }
+        else if (productName.includes("카드할인")) {
+            unitPriceArray.splice(index, 0, undefined);
+            quantityArray.splice(index, 0, undefined);
+        }
     })
 
     // 4개의 배열의 길이가 모두 같으면 정상임. 정상이면 완성된 배열들 리턴
