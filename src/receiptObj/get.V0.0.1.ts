@@ -15,7 +15,7 @@
  * 상품명 단가 수량 금액 요소간의 y축 거리는 어떠한 다른 요소들과의 y축 거리보다 가까움.
  * 상품명 단가 수량 금액 요소들 모두 구글 비젼API가 오타없이 정확히 찾아냈음 (비록 오답인 요소가 함께 찾아졌을지라도).
  * 위에서 언급한 오답인 요소는 정답요소와 완전한 수평위치에 있을 수 없음.
- * "표시 상품은 부가세 면세품목입니다" 를 정확히 하나만 찾아냈음.
+ * "표시 상품은 부가세 면세품목입니다" | "과세물품" 를 정확히 하나만 찾아냈음.
  * 
  * (위 가정들은 굉장히 편한, 매우 위험한 가정일테지만 더 많은 영수증표본을 통해야만 효과적인 방식을 찾아낼 수 있다고 판단되기에 이런 가정을 하였음)
  */
@@ -72,6 +72,11 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
             {includeWords: true, word: 1}
         )
     );
+
+    // console.log('productNameGroup', productNameGroup);
+    // console.log('unitPriceGroup', unitPriceGroup);
+    // console.log('quantityGroup', quantityGroup);
+    // console.log('amountGroup', amountGroup);
 
     // 상품명, 단가, 수량, 금액 요소들의 텍스트들을 행열에 맞춰 모두 같은 길이의 배열로 만들기.
     const textArrays = getTextArraysFromGroups(
@@ -182,7 +187,7 @@ function getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, reg) {
  * #### 영수증 위치해석 & 읽을 text 위치 결정
  * 
  * 1. 상품명 단가 수량 금액 라인 찾기.
- * 2. 표시 상품은 부가세 면세품목입니다 부분 찾기.
+ * 2. Item 하안선 기준요소 부분 찾기.
  * 3. 1,2 번에서 찾은걸로 y축 범위 결정하기.
  * 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기.
  */
@@ -241,8 +246,16 @@ function findItemRange(textAnnotations, fullTextAnnotationPlusStudy) {
         }
     });
 
-    // 2. 표시 상품은 부가세 면세품목입니다 부분 찾기
+    // 2. 아이템 y축 하안선 기준요소 찾기
+    let itemYBottomPin = []
     const taxExemptionMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /표시 상품은 부가세 면세품목입니다/)
+    if (taxExemptionMsg === null) {
+        const taxProductAmountMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /과세물품/)
+        itemYBottomPin = taxProductAmountMsg
+    }
+    else {
+        itemYBottomPin = taxExemptionMsg
+    }
 
     // 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
     const productNameYs = getXorYArr(productName[productNameIndex], "y")
@@ -250,8 +263,8 @@ function findItemRange(textAnnotations, fullTextAnnotationPlusStudy) {
     const quantityYs = getXorYArr(quantity[quantityIndex], "y")
     const amountYs = getXorYArr(amount[amountIndex], "y")
     const minY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
-    // maxY 는 taxExemptionMsg의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
-    const maxY = getXorYArr(taxExemptionMsg[0], "y")
+    // maxY 는 itemYBottomPin 의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
+    const maxY = getXorYArr(itemYBottomPin[0], "y")
         .sort((a, b) => a - b)[1]
 
     // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
@@ -434,6 +447,11 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
         }
     })
 
+    // console.log(productNameArray)
+    // console.log(unitPriceArray)
+    // console.log(quantityArray)
+    // console.log(amountArray)
+
     // 4개의 배열의 길이가 모두 같으면 정상임. 정상이면 완성된 배열들 리턴
     if (
         productNameArray.length === unitPriceArray.length &&
@@ -462,7 +480,10 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
     };
 
     /**
-     * 하나의 아이템으로 찾아야할것을 word level 로 쪼개져 찾을경우 솔루션
+     * 상품명 전용 툴
+     * 
+     * - 하나의 아이템으로 찾아야할것을 word level 로 쪼개져 찾을경우 솔루션
+     * - 시작 문자열이 두자리 숫자이거나 특정메시지가 포함됬을경우만 하나의 열로 인식하도록 함
      */
     function makeProductNameArrFromGroup(group) {
         // 그룹 요소중에 word level 로 쪼개서 찾아진내용은 순서대로 이어붙인다음 \n 검사해야함.
@@ -484,7 +505,12 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
                 }
                 item[1].textStudy.split('\n').forEach((text) => { // textStudy 그냥 전부 text 로 통일하는게 좋지 않을까?
                     if (text !== '') {
-                        arr.push(text)
+                        if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
+                            arr.push(text)
+                        }
+                        else {
+                            arr[arr.length-1] += text
+                        }
                     }
                 })
             };
