@@ -1,4 +1,4 @@
-import { Equals, IsEmail, IsIn, IsNotEmpty } from "class-validator";
+import { IsEmail, IsIn, IsNotEmpty } from "class-validator";
 
 export class MultipartBodyDto {
     

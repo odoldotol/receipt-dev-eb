@@ -408,25 +408,30 @@ function sortGroupAscByY(group) {
  * 
  * 상품명이 아래와 같을때 해당칼럽과 열에 빈곳이 존재한다.
  * * 행사할인 : 단가, 수량.
+ * * 카드할인 : 단가, 수량.
  * * 쿠폰할인 : 수량.
  */
 function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup, amountGroup) {
 
     // 각 Group 순회하며 Arr 만들기 (\n 기준으로 split 해서 배열로 만들어준다.)
-    const productNameArray = makeArrFromGroup(productNameGroup);
+    const productNameArray = makeProductNameArrFromGroup(productNameGroup);
     const unitPriceArray = makeArrFromGroup(unitPriceGroup);
     const quantityArray = makeArrFromGroup(quantityGroup);
     const amountArray = makeArrFromGroup(amountGroup);
 
-    // 상품명 arr 에서 행사할인|쿠폰할인 들의 index 로 단가 수량 arr 에 undefined 삽입
+    // 상품명 arr 에서 특정상품명이 발견되는 index 로 단가 수량 arr 에 undefined 삽입
     productNameArray.forEach((productName, index) => {
-        if (productName.includes("행사할인")) {
+        if (productName.includes("행사할인"&&"카드할인")) {
             unitPriceArray.splice(index, 0, undefined);
             quantityArray.splice(index, 0, undefined);
         }
         else if (productName.includes("쿠폰할인")) {
             quantityArray.splice(index, 0, undefined);
         }
+        // else if (productName.includes("카드할인")) {
+        //     unitPriceArray.splice(index, 0, undefined);
+        //     quantityArray.splice(index, 0, undefined);
+        // }
     })
 
     // 4개의 배열의 길이가 모두 같으면 정상임. 정상이면 완성된 배열들 리턴
@@ -441,6 +446,9 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
         return null;
     }
 
+    /**
+     * 기본적인 범용 툴
+     */
     function makeArrFromGroup(group) {
         let arr = []
         group.forEach((item) => {
@@ -449,6 +457,37 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
                     arr.push(text)
                 }
             })
+        })
+        return arr
+    };
+
+    /**
+     * 하나의 아이템으로 찾아야할것을 word level 로 쪼개져 찾을경우 솔루션
+     */
+    function makeProductNameArrFromGroup(group) {
+        // 그룹 요소중에 word level 로 쪼개서 찾아진내용은 순서대로 이어붙인다음 \n 검사해야함.
+        let arr = []
+        let wordToParagraph = []
+        group.forEach((item) => {
+            const wIdx = item[0].wordIdx
+            if (wIdx !== undefined) {
+                wordToParagraph[wIdx] = item[1].textStudy
+            }
+            else {
+                if (wordToParagraph.length > 0) {
+                    wordToParagraph.join('').split('\n').forEach((text) => {
+                        if (text !== '') {
+                            arr.push(text)
+                        }
+                    })
+                    wordToParagraph = []
+                }
+                item[1].textStudy.split('\n').forEach((text) => { // textStudy 그냥 전부 text 로 통일하는게 좋지 않을까?
+                    if (text !== '') {
+                        arr.push(text)
+                    }
+                })
+            };
         })
         return arr
     };
@@ -495,8 +534,8 @@ function deleteAllCommaEachEleInArr(arr) {
 function makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountArr):ReceiptItem[] {
     const receiptItemArray = [];
     productNameArr.forEach((productName, idx) => {
-        // 행사할인, 쿠폰할인 발견하면 Discount 객체 만들어서 바로 전 아이템에 넣어주기
-        if (productName.includes("행사할인")) {
+        // Discount 상품명 발견하면 Discount 객체 만들어서 바로 전 아이템에 넣어주기
+        if (productName.includes("행사할인"&&"카드할인")) {
             const discount = new Discount(productName, amountArr[idx])
             receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
         }
@@ -505,9 +544,9 @@ function makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountA
             receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
         }
         else {
-        // . 으로 시작하는것 발견하면 taxExemption = true 주고 . 제거하고 space 제거하기
+        // .|* 으로 시작하는것 발견하면 taxExemption = true 주고 .|* 제거하고 space 제거하기
             let taxExemption = false;
-            if (productName.charAt(0) === ".") {
+            if (productName.charAt(0) === "." || productName.charAt(0) === "*") {
                 productName = productName.replace(/^./, '').replace(/^[ ]+/g, '')
                 taxExemption = true;
             }

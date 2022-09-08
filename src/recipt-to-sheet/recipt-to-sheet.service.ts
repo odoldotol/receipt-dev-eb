@@ -7,6 +7,7 @@ import xlsx from 'xlsx'
 import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
 import getReceiptObject from '../receiptObj/get.V0.0.1';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
+import { writeFile } from 'fs';
 
 @Injectable()
 export class ReciptToSheetService {
@@ -39,7 +40,7 @@ export class ReciptToSheetService {
                 result = err
             });
         return result
-    }
+    };
 
     createAttachments(receiptObject, sheetFormat) {
         let attachment
@@ -89,7 +90,7 @@ export class ReciptToSheetService {
             type: "application/" + sheetFormat,
             disposition: "attachment"
         }]
-    }
+    };
 
     async sendEmail(attachments, emailAddress) {
         sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
@@ -113,7 +114,7 @@ export class ReciptToSheetService {
                 result = {"Email sent ERROR": error}
             })
         return result
-    }
+    };
 
     async processingTransferredReceipt(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
 
@@ -134,8 +135,6 @@ export class ReciptToSheetService {
             multipartBody
         );
 
-        console.log(receiptObject)
-
         // Sheet 만들기 (csv | xlsx) -> attachments 만들기
         const attachments = this.createAttachments(receiptObject, multipartBody.sheetFormat);
         
@@ -148,5 +147,16 @@ export class ReciptToSheetService {
         */
 
         return {email,annotateResult}; // 앞의 모든 프로세스에 대한 결과나 상태를 알 수 있는 객체를 반환하기
-    }
+    };
+
+    async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
+        
+        const annotateResult = await this.annotateImage(reciptImage);
+
+        let data = "export = " + JSON.stringify(annotateResult, null, 4);
+        writeFile("src/googleVisionAnnoLab/annotateResult.ts", data, () => { console.log("WRITED: annotateResult.ts"); });
+
+        data = "export = " + JSON.stringify(multipartBody, null, 4);
+        writeFile("src/googleVisionAnnoLab/multipartBody.ts", data, () => { console.log("WRITED: multipartBody.ts"); });
+    };
 };
