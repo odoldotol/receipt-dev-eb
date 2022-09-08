@@ -79,7 +79,7 @@ class Receipt {
         public provider: Provider,
         public itemArray: ReceiptItem[],
         public readFromReceipt?: ReceiptReadFromReceipt,
-        public userInput?,
+        public providerInput?,
         public outputRequests?: OutputRequest[],
         public imageAddress?: string,
     ) {

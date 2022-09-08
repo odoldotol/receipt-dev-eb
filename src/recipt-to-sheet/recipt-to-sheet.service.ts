@@ -99,7 +99,7 @@ export class ReciptToSheetService {
             from: 'service.lygo@gmail.com', // verified sender
             subject: '00년 00월 00일 결제하신 홈플러스 영수증의 엑셀파일입니다.', // 결제일, 마트, 시트포멧
             // text: 'www.recipto.com',
-            html: '<strong>www.recipto.com</strong>',
+            html: '<strong>www.receipto.com</strong>',
             attachments
         }
         let result

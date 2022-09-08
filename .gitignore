@@ -39,3 +39,8 @@ lerna-debug.log*
 #
 credential.json
 .env
+
+#
+/src/googleVisionAnnoLab/annotateResult.ts
+/src/googleVisionAnnoStudy/sametest.ts
+/src/googleVisionAnnoStudy/fullTextAnnotationPlusStudy.ts
