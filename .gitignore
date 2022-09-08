@@ -42,5 +42,6 @@ credential.json
 
 #
 /src/googleVisionAnnoLab/annotateResult.ts
+/src/googleVisionAnnoLab/multipartBody.ts
 /src/googleVisionAnnoStudy/sametest.ts
 /src/googleVisionAnnoStudy/fullTextAnnotationPlusStudy.ts
