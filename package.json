@@ -21,7 +21,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "study": "ts-node src/googleVisionAnnoStudy/googleVisionAnnotationStudy.ts",
     "study:get": "ts-node src/googleVisionAnnoStudy/getValue.ts",
-    "lab": "ts-node src/googleVisionAnnoLab/lab.ts"
+    "lab": "ts-node src/googleVisionAnnoLab/lab.ts",
+    "lab:test": "ts-node src/googleVisionAnnoLab/test.ts",
+    "lab:save": "ts-node src/googleVisionAnnoLab/save.ts"
+
+
   },
   "dependencies": {
     "@google-cloud/vision": "^2.4.2",

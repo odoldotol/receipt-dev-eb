@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsNotEmpty } from "class-validator";
+import { IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
 
 export class MultipartBodyDto {
     
@@ -9,4 +9,11 @@ export class MultipartBodyDto {
     @IsIn(["xlsx","csv"])
     readonly sheetFormat: string;
 
+    @IsOptional()
+    @IsIn(['homeplus'])
+    readonly receiptStyle?: string;
+
+    @IsOptional()
+    @IsString()
+    readonly labsReceiptNumber?: string;
 };

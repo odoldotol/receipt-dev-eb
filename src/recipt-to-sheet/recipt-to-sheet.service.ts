@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
@@ -151,12 +151,16 @@ export class ReciptToSheetService {
 
     async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
         
+        const {receiptStyle, labsReceiptNumber} = multipartBody;
+        if (!receiptStyle || !labsReceiptNumber) {
+            throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
+        }
         const annotateResult = await this.annotateImage(reciptImage);
 
         let data = "export = " + JSON.stringify(annotateResult, null, 4);
-        writeFile("src/googleVisionAnnoLab/annotateResult.ts", data, () => { console.log("WRITED: annotateResult.ts"); });
+        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
 
         data = "export = " + JSON.stringify(multipartBody, null, 4);
-        writeFile("src/googleVisionAnnoLab/multipartBody.ts", data, () => { console.log("WRITED: multipartBody.ts"); });
+        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
     };
 };

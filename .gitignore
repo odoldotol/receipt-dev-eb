@@ -41,7 +41,7 @@ credential.json
 .env
 
 #
-/src/googleVisionAnnoLab/annotateResult.ts
-/src/googleVisionAnnoLab/multipartBody.ts
 /src/googleVisionAnnoStudy/sametest.ts
 /src/googleVisionAnnoStudy/fullTextAnnotationPlusStudy.ts
+/src/googleVisionAnnoLab/annotateResult
+/src/googleVisionAnnoLab/expectReceipt

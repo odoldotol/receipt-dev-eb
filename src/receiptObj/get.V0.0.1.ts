@@ -1,5 +1,4 @@
-// version 0.0.1 <Beta>
-// 이 버전은 서비스가 불가능한 실험적인 베타버전입니다.
+// version 0.0.1
 
 // 구굴 비젼 API 의 "TEXT_DETECTION", "DOCUMENT_TEXT_DETECTION" 기능을 포함한 annotateResult: [google.cloud.vision.v1.IAnnotateImageResponse] 로부터 데이터를 얻습니다.
 // 인자 annotateResult 는 googleVisionAnnoPipe/inspector.V0.0.1 를 통해 검증되어야 합니다.
@@ -7,6 +6,13 @@
 
 // 영수증의 구조분석과 요소간 상대적 위치를 기준으로 텍스트요소들을 찾아내는 솔루션입니다.
 // 홈플러스 단일 술루션입니다.
+
+// 홈플러스 1번 영수증을 기반으로 시작했다.
+/** 
+ * 테스트영수증 커버리지
+ * 
+ * 홈플러스 : 1-4, 5(진행중)
+ */
 
 /** 제약적인 가정
  * 
@@ -18,6 +24,12 @@
  * "표시 상품은 부가세 면세품목입니다" | "과세물품" 를 정확히 하나만 찾아냈음.
  * 
  * (위 가정들은 굉장히 편한, 매우 위험한 가정일테지만 더 많은 영수증표본을 통해야만 효과적인 방식을 찾아낼 수 있다고 판단되기에 이런 가정을 하였음)
+ */
+
+/** 확인된 한계
+ * 
+ * taxExemption 은 서비스할 기대를 하지 말자.
+ * 홈플러스의 부가세 면세품목을 감지하기위해서는 * 를 똑바로 감지해야하는데 이에대한 정확도에 문제가 있음.
  */
 
 import { MultipartBodyDto } from 'src/recipt-to-sheet/dto/multipartBody.dto';
@@ -484,29 +496,81 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
      * 
      * - 하나의 아이템으로 찾아야할것을 word level 로 쪼개져 찾을경우 솔루션
      * - 시작 문자열이 두자리 숫자이거나 특정메시지가 포함됬을경우만 하나의 열로 인식하도록 함
+     * - 할인정보 항목이 상품명 항목과 이어붙는 경우 핸들링
      */
     function makeProductNameArrFromGroup(group) {
         // 그룹 요소중에 word level 로 쪼개서 찾아진내용은 순서대로 이어붙인다음 \n 검사해야함.
         let arr = []
         let wordToParagraph = []
+        let tempPageIdx = NaN
+        let tempBlockIdx = NaN
+        let tempParagraphIdx = NaN
         group.forEach((item) => {
-            const wIdx = item[0].wordIdx
-            if (wIdx !== undefined) {
-                wordToParagraph[wIdx] = item[1].textStudy
+            const {pageIdx, blockIdx, paragraphIdx, wordIdx} = item[0]
+            if (wordIdx !== undefined) {
+                if (tempPageIdx === NaN && tempBlockIdx === NaN && tempParagraphIdx === NaN) {
+                    wordToParagraph[wordIdx] = item[1].textStudy
+                    tempPageIdx = pageIdx
+                    tempBlockIdx = blockIdx
+                    tempParagraphIdx = paragraphIdx
+                }
+                else if (tempPageIdx === pageIdx && tempBlockIdx === blockIdx && tempParagraphIdx === paragraphIdx) {
+                    wordToParagraph[wordIdx] = item[1].textStudy
+                }
+                else {
+                    wordToParagraph.join('').split('\n').forEach((text) => {
+                        if (text !== '') {
+                            if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
+                                if (/^[0-9]{2}/.test(text) && /쿠폰할인+$|행사할인+$/.test(text)) {
+                                    arr.push(text.slice(0, text.length-4))
+                                    arr.push(text.slice(text.length-4))
+                                }
+                                else {
+                                    arr.push(text)
+                                }
+                            }
+                            else {
+                                arr[arr.length-1] += text
+                            }
+                        }
+                    })
+                    wordToParagraph = []
+                    wordToParagraph[wordIdx] = item[1].textStudy
+                    tempPageIdx = pageIdx
+                    tempBlockIdx = blockIdx
+                    tempParagraphIdx = paragraphIdx
+                }
             }
             else {
                 if (wordToParagraph.length > 0) {
                     wordToParagraph.join('').split('\n').forEach((text) => {
                         if (text !== '') {
-                            arr.push(text)
+                            if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
+                                if (/^[0-9]{2}/.test(text) && /쿠폰할인+$|행사할인+$/.test(text)) {
+                                    arr.push(text.slice(0, text.length-4))
+                                    arr.push(text.slice(text.length-4))
+                                }
+                                else {
+                                    arr.push(text)
+                                }
+                            }
+                            else {
+                                arr[arr.length-1] += text
+                            }
                         }
                     })
                     wordToParagraph = []
                 }
-                item[1].textStudy.split('\n').forEach((text) => { // textStudy 그냥 전부 text 로 통일하는게 좋지 않을까?
+                item[1].textStudy.split('\n').forEach((text) => {
                     if (text !== '') {
                         if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
-                            arr.push(text)
+                            if (/^[0-9]{2}/.test(text) && /쿠폰할인+$|행사할인+$/.test(text)) {
+                                arr.push(text.slice(0, text.length-4))
+                                arr.push(text.slice(text.length-4))
+                            }
+                            else {
+                                arr.push(text)
+                            }
                         }
                         else {
                             arr[arr.length-1] += text
@@ -561,12 +625,16 @@ function makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountA
     const receiptItemArray = [];
     productNameArr.forEach((productName, idx) => {
         // Discount 상품명 발견하면 Discount 객체 만들어서 바로 전 아이템에 넣어주기
-        if (productName.includes("행사할인"&&"카드할인")) {
+        if (productName.includes("행사할인")) {
             const discount = new Discount(productName, amountArr[idx])
             receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
         }
         else if (productName.includes("쿠폰할인")) {
             const discount = new Discount(productName, amountArr[idx], unitPriceArr[idx])
+            receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
+        }
+        else if (productName.includes("카드할인")) {
+            const discount = new Discount(productName, amountArr[idx])
             receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
         }
         else {
