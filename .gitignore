@@ -45,3 +45,4 @@ credential.json
 /src/googleVisionAnnoStudy/fullTextAnnotationPlusStudy.ts
 /src/googleVisionAnnoLab/annotateResult
 /src/googleVisionAnnoLab/expectReceipt
+/src/googleVisionAnnoLab/fullTextAnnotationPlusStudy
