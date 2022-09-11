@@ -4,7 +4,7 @@ import { readFileSync, writeFile } from 'fs';
 
 /* ------------------------------------------------------------------ */
 const receiptStyle = "homeplus"; //
-const receiptNumber = 5; //
+const receiptNumber = 6; //
 /* ------------------------------------------------------------------ */
 
 const annotateResult = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptNumber}.ts`, 'utf8').slice(9));
