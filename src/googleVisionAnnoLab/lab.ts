@@ -13,10 +13,10 @@ const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateR
 
 const pipedAnnotateResult = googleVisionAnnoInspectorPipe(annotateResult);
 
-/* fullTextAnnotationPlusStudy 파일 쓰기
-const data = "export = " + JSON.stringify(pipedAnnotateResult.fullTextAnnotationPlusStudy, null, 4);
-writeFile(`src/googleVisionAnnoLab/fullTextAnnotationPlusStudy/${receiptStyle}/${receiptNumber}.ts`, data, () => { console.log("WRITED: a fullTextAnnotationPlusStudy file"); });
-*/
+// // fullTextAnnotationPlusStudy 파일 쓰기
+// const data = "export = " + JSON.stringify(pipedAnnotateResult.fullTextAnnotationPlusStudy, null, 4);
+// writeFile(`src/googleVisionAnnoLab/fullTextAnnotationPlusStudy/${receiptStyle}/${receiptNumber}.ts`, data, () => { console.log("WRITED: a fullTextAnnotationPlusStudy file", receiptNumber); });
+
 
 const receiptObject = getReceiptObject(pipedAnnotateResult, multipartBody);
 

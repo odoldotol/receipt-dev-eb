@@ -70,12 +70,21 @@ export class ReciptToSheetService {
                     '단가': item.readFromReceipt.unitPrice,
                     '수량': item.readFromReceipt.quantity,
                     '금액': item.readFromReceipt.amount,
-                    '할인': item.readFromReceipt.discountArray.reduce((acc, cur) => acc + cur.amount, 0), // 후에, 영수증 객체 자체에 할인summary 같은걸 넣고 이부분 수정하자
+                    '할인총금액': item.itemDiscountAmount,
                     '구매금액': item.purchaseAmount,
                     '카테고리': item.category,
                     '부가세면세': item.readFromReceipt.taxExemption,
                 }
             });
+
+            // 할인 내용 추가
+            receiptObject.itemArray.forEach((item, itemIdx) => {
+                item.readFromReceipt.discountArray.forEach((discount, discountIdx) => {
+                    rowObjArr[itemIdx][`할인${discountIdx+1}`] = discount.name
+                    rowObjArr[itemIdx][`할인${discountIdx+1}코드`] = discount.code
+                    rowObjArr[itemIdx][`할인${discountIdx+1}금액`] = discount.amount
+                })
+            })
 
             const wb = xlsx.utils.book_new()
             const ws = xlsx.utils.json_to_sheet(rowObjArr)

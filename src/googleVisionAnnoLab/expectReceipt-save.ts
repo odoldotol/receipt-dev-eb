@@ -4,7 +4,7 @@ import { readFileSync, writeFile } from 'fs';
 
 /* ------------------------------------------------------------------ */
 const receiptStyle = "homeplus"; //
-const receiptNumber = 6; //
+const receiptNumber = 7; //
 /* ------------------------------------------------------------------ */
 
 const annotateResult = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptNumber}.ts`, 'utf8').slice(9));
@@ -17,4 +17,4 @@ const receiptObject = getReceiptObject(
 );
 
 const data = "export = " + JSON.stringify(receiptObject, null, 4);
-writeFile(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}/${receiptNumber}.ts`, data, () => { console.log("WRITED: an expectReceipt file"); });
+writeFile(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}/${receiptNumber}.ts`, data, () => { console.log("WRITED: an expectReceipt file", receiptNumber); });
