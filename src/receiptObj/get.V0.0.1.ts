@@ -11,7 +11,7 @@
 /** 
  * 테스트영수증 커버리지
  * 
- * 홈플러스 : 1-4, 5(진행중)
+ * 홈플러스 : 1-5
  */
 
 /** 제약적인 가정
@@ -26,10 +26,11 @@
  * (위 가정들은 굉장히 편한, 매우 위험한 가정일테지만 더 많은 영수증표본을 통해야만 효과적인 방식을 찾아낼 수 있다고 판단되기에 이런 가정을 하였음)
  */
 
-/** 확인된 한계
+/** 한계
  * 
- * taxExemption 은 서비스할 기대를 하지 말자.
+ * taxExemption 은 기대를 하지 말자.
  * 홈플러스의 부가세 면세품목을 감지하기위해서는 * 를 똑바로 감지해야하는데 이에대한 정확도에 문제가 있음.
+ * 우선 * 이나 . 로 찾는건 처리를 하지만 그외 이상하게 찾거나 못찾는것은 그대로 방치중임
  */
 
 import { MultipartBodyDto } from 'src/recipt-to-sheet/dto/multipartBody.dto';
@@ -41,13 +42,22 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
     
     const {textAnnotations, fullTextAnnotationPlusStudy} = annotateResult;
 
-    const {
+    // 영수증의 기울기나 상태에 따라 범위를 조절해야할 수도 있음. 일단은 고정솔루션으로 최대한 커버해보기
+    /* const {
         productNameRangeX,
         unitPriceRangeX,
         quantityRangeX,
         amountRangeX,
         itemRangeY
-    } = findItemRange(textAnnotations, fullTextAnnotationPlusStudy);
+    } = findItemRange(textAnnotations, fullTextAnnotationPlusStudy); */
+
+    const { // 먼저 단가까지만 찾을준비
+        productNameRangeX,
+        unitPriceRangeX,
+        itemRangeY,
+        quantity,
+        amount
+    } = findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy);
 
     // 상품명, 단가, 수량, 금액 요소들을 모아놓은 배열을 만들고 y축에대해 정렬.
     const productNameGroup = sortGroupAscByY(
@@ -67,21 +77,45 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
             {includeWords: true, word: 1}
         )
     );
+    // const quantityGroup = sortGroupAscByY(
+    //     getFulltextAnnoObjByRange(
+    //         fullTextAnnotationPlusStudy,
+    //         quantityRangeX,
+    //         itemRangeY,
+    //         false
+    //     )
+    // );
+
+    const { // 수량, 금약 찾을 준비
+        quantityRangeX,
+        amountRangeX
+    } = findItemRangeQuantityAmount(textAnnotations, quantity, amount, unitPriceGroup);
+
     const quantityGroup = sortGroupAscByY(
         getFulltextAnnoObjByRange(
             fullTextAnnotationPlusStudy,
             quantityRangeX,
             itemRangeY,
-            false
+            true,
+            {includeSymbols: false}
         )
     );
+    // const amountGroup = sortGroupAscByY(
+    //     getFulltextAnnoObjByRange(
+    //         fullTextAnnotationPlusStudy,
+    //         amountRangeX,
+    //         itemRangeY,
+    //         false,
+    //         {includeWords: true, word: 1}
+    //     )
+    // );
     const amountGroup = sortGroupAscByY(
         getFulltextAnnoObjByRange(
             fullTextAnnotationPlusStudy,
             amountRangeX,
             itemRangeY,
-            false,
-            {includeWords: true, word: 1}
+            true,
+            {includeSymbols: false}
         )
     );
 
@@ -100,7 +134,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
 
     /* 다듬기
     상품명: 숫자 두개로 시작하면 숫자 두개 제거, 공백으로 시작하거나 공백으로 끝나면 공백 제거
-    나머지: 공백으로 시작하거나 공백으로 끝나면 공백 제거, 쉼표+숫자+숫자+숫자 발견시 쉼표 제거(그냥 모든쉼표 제거로 대체) */
+    나머지: 공백으로 시작하거나 공백으로 끝나면 공백 제거, 쉼표+숫자+숫자+숫자 발견시 쉼표 제거(그냥 모든쉼표 제거로 대체+포인트(.)로잘못찾는것도 제거) */
     const productNameArr = deleteSpacesEachEleOfFrontAndBackInArr(
         deleteStartingTwoNumbersEachEleInArr(textArrays.productNameArray)
     );
@@ -139,19 +173,19 @@ function getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, reg) {
     if (reg.test(fullTextAnnotationPlusStudy.text)) {
         let isInPage = false
         fullTextAnnotationPlusStudy.pages.forEach((page, pageIndex) => {
-            if (reg.test(page.textStudy)) {
+            if (reg.test(page.text)) {
                 isInPage = true
                 let isInBlock = false
                 page.blocks.forEach((block, blockIndex) => {
-                    if (reg.test(block.textStudy)) {
+                    if (reg.test(block.text)) {
                         isInBlock = true
                         let isInParagraph = false
                         block.paragraphs.forEach((paragraph, paragraphIndex) => {
-                            if (reg.test(paragraph.textStudy)) {
+                            if (reg.test(paragraph.text)) {
                                 isInParagraph = true
                                 let isInWord = false
                                 paragraph.words.forEach((word, wordIndex) => {
-                                    if (reg.test(word.textStudy)) {
+                                    if (reg.test(word.text)) {
                                         isInWord = true
                                         let isInSymbol = false
                                         word.symbols.forEach((symbol, symbolIndex) => {
@@ -280,31 +314,251 @@ function findItemRange(textAnnotations, fullTextAnnotationPlusStudy) {
         .sort((a, b) => a - b)[1]
 
     // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
-    const unitPriceAverageX = calAverageXorY(unitPrice[unitPriceIndex], "x")
+    // const unitPriceAverageX = calAverageXorY(unitPrice[unitPriceIndex], "x")
+    const unitPriceMaxX = Math.max(...getXorYArr(unitPrice[unitPriceIndex], "x"))
     const textAnnotationsMinX = Math.min(...getXorYArr(textAnnotations[0], "x", true))
-    const productNameRangeX = [textAnnotationsMinX,unitPriceAverageX]
+    const textAnnotationsMaxX = Math.max(...getXorYArr(textAnnotations[0], "x", true))
+    // const productNameRangeX = [textAnnotationsMinX,unitPriceAverageX]
+    const productNameRangeX = [textAnnotationsMinX,unitPriceMaxX]
     const quantityMinX = Math.min(...getXorYArr(quantity[quantityIndex], "x"))
-    const unitPriceRangeX = [unitPriceAverageX,quantityMinX]
+    const quantityAverageX = calAverageXorY(quantity[quantityIndex], "x")
+    const unitPriceRangeX = [unitPriceMaxX,quantityMinX]
     const quantityMaxX = Math.max(...getXorYArr(quantity[quantityIndex], "x"))
     const amountMinX = Math.min(...getXorYArr(amount[amountIndex], "x"))
-    const quantityRangeX = [quantityMinX,(quantityMaxX+amountMinX)/2]
-    const amountMaxX = Math.max(...getXorYArr(amount[amountIndex], "x"))
-    const amountRangeX = [amountMinX,amountMaxX]
+    // const quantityRangeX = [quantityMinX,(quantityMaxX+amountMinX)/2]
+    const quantityRangeX = [quantityAverageX,(quantityMaxX+amountMinX)/2]
+    // const amountMaxX = Math.max(...getXorYArr(amount[amountIndex], "x"))
+    // const amountRangeX = [amountMinX,amountMaxX]
+    const amountRangeX = [(quantityMaxX+amountMinX)/2,textAnnotationsMaxX]
     const itemRangeY = [minY,maxY]
 
     return {productNameRangeX, unitPriceRangeX, quantityRangeX, amountRangeX, itemRangeY}
+};
 
-    function calAverageXorY(fullTextAnooObj, coordinate:"x"|"y") {
-        return fullTextAnooObj[1].boundingBox.vertices.reduce((acc, cur) => acc + cur[coordinate], 0) / 4
+/**
+ * #### 영수증 위치해석 & 읽을 text 위치 결정 // 단가까지만
+ * 
+ * 1. 상품명 단가 수량 금액 라인 찾기.
+ * 2. Item 하안선 기준요소 부분 찾기.
+ * 3. 1,2 번에서 찾은걸로 y축 범위 결정하기.
+ * 4. 상품명, 단가 가로축 범위 결정하기.
+ */
+ function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy) {
+
+    // 1. 상품명 단가 수량 금액 라인 찾기
+    const productName = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /상품명/)
+    const unitPrice = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /단가/)
+    const quantity = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /수량/)
+    const amount = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /금액/)
+
+    let productNameIndex: number;
+    let unitPriceIndex: number;
+    let quantityIndex: number;
+    let amountIndex: number;
+
+    let unitPriceAverageY: number;
+    let quantityAverageY: number;
+    
+    // 상품명과 단가를 비교하여 세로축이 가장 인접한것 매칭
+    let difference = 999;
+    productName.forEach((productNameEle, productNameEleIdx) => {
+        unitPrice.forEach((unitPriceEle, unitPriceEleIdx) => {
+            const productNameEleAverageY = calAverageXorY(productNameEle, "y")
+            const unitPriceEleAverageY = calAverageXorY(unitPriceEle, "y")
+            const newDifference = Math.abs(productNameEleAverageY - unitPriceEleAverageY)
+            if (newDifference < difference) {
+                difference = newDifference
+                productNameIndex = productNameEleIdx
+                unitPriceIndex = unitPriceEleIdx
+                unitPriceAverageY = unitPriceEleAverageY
+            }
+        })
+    });
+
+    // 단가를 기준으로 세로축방향으로 가장 인접한 수량 찾기
+    difference = 999;
+    quantity.forEach((quantityEle, quantityEleIdx) => {
+        const quantityEleAverageY = calAverageXorY(quantityEle, "y")
+        const newDifference = Math.abs(unitPriceAverageY - quantityEleAverageY)
+        if (newDifference < difference) {
+            difference = newDifference
+            quantityIndex = quantityEleIdx
+            quantityAverageY = quantityEleAverageY
+        }
+    });
+
+    // 수량을 기준으로 세로축방향으로 가장 인접한 금액 찾기
+    difference = 999;
+    amount.forEach((amountEle, amountEleIdx) => {
+        const amountEleAverageY = calAverageXorY(amountEle, "y")
+        const newDifference = Math.abs(quantityAverageY - amountEleAverageY)
+        if (newDifference < difference) {
+            difference = newDifference
+            amountIndex = amountEleIdx
+        }
+    });
+
+    // 2. 아이템 y축 하안선 기준요소 찾기
+    let itemYBottomPin = []
+    const taxExemptionMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /표시 상품은 부가세 면세품목입니다/)
+    if (taxExemptionMsg === null) {
+        const taxProductAmountMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /과세물품/)
+        itemYBottomPin = taxProductAmountMsg
+    }
+    else {
+        itemYBottomPin = taxExemptionMsg
     }
 
-    function getXorYArr(AnnoObj, coordinate:"x"|"y", isTextAnno?) {
-        if (isTextAnno === true) {
-            return AnnoObj.boundingPoly.vertices.map((v) => v[coordinate])
+    // 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
+    const productNameYs = getXorYArr(productName[productNameIndex], "y")
+    const unitPriceYs = getXorYArr(unitPrice[unitPriceIndex], "y")
+    const quantityYs = getXorYArr(quantity[quantityIndex], "y")
+    const amountYs = getXorYArr(amount[amountIndex], "y")
+    const minY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
+    // maxY 는 itemYBottomPin 의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
+    const maxY = getXorYArr(itemYBottomPin[0], "y")
+        .sort((a, b) => a - b)[1]
+
+    // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
+    // const unitPriceAverageX = calAverageXorY(unitPrice[unitPriceIndex], "x")
+    const unitPriceMaxX = Math.max(...getXorYArr(unitPrice[unitPriceIndex], "x"))
+    const textAnnotationsMinX = Math.min(...getXorYArr(textAnnotations[0], "x", true))
+    // const textAnnotationsMaxX = Math.max(...getXorYArr(textAnnotations[0], "x", true))
+    // const productNameRangeX = [textAnnotationsMinX,unitPriceAverageX]
+    const productNameRangeX = [textAnnotationsMinX,unitPriceMaxX]
+    const quantityMinX = Math.min(...getXorYArr(quantity[quantityIndex], "x"))
+    // const quantityAverageX = calAverageXorY(quantity[quantityIndex], "x")
+    const unitPriceRangeX = [unitPriceMaxX,quantityMinX]
+    // const unitPriceGroupMaxX = Math.max(...getXorYArr(unitPriceGroup[unitPriceIndex], "x", true)) // 단가 그룹의 맨위와 맨밑의 최대 x값
+    // const quantityMaxX = Math.max(...getXorYArr(quantity[quantityIndex], "x"))
+    // const amountMinX = Math.min(...getXorYArr(amount[amountIndex], "x"))
+    // const quantityRangeX = [quantityMinX,(quantityMaxX+amountMinX)/2]
+    // const quantityRangeX = [quantityAverageX,(quantityMaxX+amountMinX)/2]
+    // const amountMaxX = Math.max(...getXorYArr(amount[amountIndex], "x"))
+    // const amountRangeX = [amountMinX,amountMaxX]
+    // const amountRangeX = [(quantityMaxX+amountMinX)/2,textAnnotationsMaxX]
+    const itemRangeY = [minY,maxY]
+
+    return {productNameRangeX, unitPriceRangeX, itemRangeY, quantity:quantity[quantityIndex], amount:amount[amountIndex]}
+};
+
+/**
+ * #### 영수증 위치해석 & 읽을 text 위치 결정 // 단가 이후
+ * 
+ * 1. 수량 금액 가로축 범위 결정하기.
+ */
+ function findItemRangeQuantityAmount(textAnnotations, quantity, amount, unitPriceGroup) {
+
+    /* // 1. 상품명 단가 수량 금액 라인 찾기
+    const productName = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /상품명/)
+    const unitPrice = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /단가/)
+    const quantity = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /수량/)
+    const amount = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /금액/)
+
+    let productNameIndex: number;
+    let unitPriceIndex: number;
+    let quantityIndex: number;
+    let amountIndex: number;
+
+    let unitPriceAverageY: number;
+    let quantityAverageY: number;
+    
+    // 상품명과 단가를 비교하여 세로축이 가장 인접한것 매칭
+    let difference = 999;
+    productName.forEach((productNameEle, productNameEleIdx) => {
+        unitPrice.forEach((unitPriceEle, unitPriceEleIdx) => {
+            const productNameEleAverageY = calAverageXorY(productNameEle, "y")
+            const unitPriceEleAverageY = calAverageXorY(unitPriceEle, "y")
+            const newDifference = Math.abs(productNameEleAverageY - unitPriceEleAverageY)
+            if (newDifference < difference) {
+                difference = newDifference
+                productNameIndex = productNameEleIdx
+                unitPriceIndex = unitPriceEleIdx
+                unitPriceAverageY = unitPriceEleAverageY
+            }
+        })
+    });
+
+    // 단가를 기준으로 세로축방향으로 가장 인접한 수량 찾기
+    difference = 999;
+    quantity.forEach((quantityEle, quantityEleIdx) => {
+        const quantityEleAverageY = calAverageXorY(quantityEle, "y")
+        const newDifference = Math.abs(unitPriceAverageY - quantityEleAverageY)
+        if (newDifference < difference) {
+            difference = newDifference
+            quantityIndex = quantityEleIdx
+            quantityAverageY = quantityEleAverageY
         }
-        else {
-            return AnnoObj[1].boundingBox.vertices.map((v) => v[coordinate])
+    });
+
+    // 수량을 기준으로 세로축방향으로 가장 인접한 금액 찾기
+    difference = 999;
+    amount.forEach((amountEle, amountEleIdx) => {
+        const amountEleAverageY = calAverageXorY(amountEle, "y")
+        const newDifference = Math.abs(quantityAverageY - amountEleAverageY)
+        if (newDifference < difference) {
+            difference = newDifference
+            amountIndex = amountEleIdx
         }
+    }); */
+
+    /* // 2. 아이템 y축 하안선 기준요소 찾기
+    let itemYBottomPin = []
+    const taxExemptionMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /표시 상품은 부가세 면세품목입니다/)
+    if (taxExemptionMsg === null) {
+        const taxProductAmountMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /과세물품/)
+        itemYBottomPin = taxProductAmountMsg
+    }
+    else {
+        itemYBottomPin = taxExemptionMsg
+    } */
+
+    /* // 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
+    const productNameYs = getXorYArr(productName[productNameIndex], "y")
+    const unitPriceYs = getXorYArr(unitPrice[unitPriceIndex], "y")
+    const quantityYs = getXorYArr(quantity[quantityIndex], "y")
+    const amountYs = getXorYArr(amount[amountIndex], "y")
+    const minY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
+    // maxY 는 itemYBottomPin 의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
+    const maxY = getXorYArr(itemYBottomPin[0], "y")
+       .sort((a, b) => a - b)[1] */
+
+    // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
+    // const unitPriceAverageX = calAverageXorY(unitPrice[unitPriceIndex], "x")
+    // const unitPriceMaxX = Math.max(...getXorYArr(unitPrice[unitPriceIndex], "x"))
+    // const textAnnotationsMinX = Math.min(...getXorYArr(textAnnotations[0], "x", true))
+    const textAnnotationsMaxX = Math.max(...getXorYArr(textAnnotations[0], "x", true))
+    // const productNameRangeX = [textAnnotationsMinX,unitPriceAverageX]
+    // const productNameRangeX = [textAnnotationsMinX,unitPriceMaxX]
+    // const quantityMinX = Math.min(...getXorYArr(quantity[quantityIndex], "x"))
+    // const quantityAverageX = calAverageXorY(quantity, "x")
+    // const unitPriceRangeX = [unitPriceMaxX,quantityMinX]
+    const unitPriceGroupMaxX = Math.max( // 단가 그룹의 맨위와 맨밑의 최대 x값
+        Math.max(...getXorYArr(unitPriceGroup[0], "x")),
+        Math.max(...getXorYArr(unitPriceGroup[unitPriceGroup.length-1], "x"))
+    )
+    const quantityMaxX = Math.max(...getXorYArr(quantity, "x"))
+    const amountMinX = Math.min(...getXorYArr(amount, "x"))
+    // const quantityRangeX = [quantityMinX,(quantityMaxX+amountMinX)/2]
+    const quantityRangeX = [unitPriceGroupMaxX,(quantityMaxX+amountMinX)/2]
+    // const amountMaxX = Math.max(...getXorYArr(amount[amountIndex], "x"))
+    // const amountRangeX = [amountMinX,amountMaxX]
+    const amountRangeX = [(quantityMaxX+amountMinX)/2,textAnnotationsMaxX]
+    // const itemRangeY = [minY,maxY]
+
+    return {quantityRangeX, amountRangeX}
+};
+
+function calAverageXorY(fullTextAnooObj, coordinate:"x"|"y") {
+    return fullTextAnooObj[1].boundingBox.vertices.reduce((acc, cur) => acc + cur[coordinate], 0) / 4
+};
+
+function getXorYArr(AnnoObj, coordinate:"x"|"y", isTextAnno?) {
+    if (isTextAnno === true) {
+        return AnnoObj.boundingPoly.vertices.map((v) => v[coordinate])
+    }
+    else {
+        return AnnoObj[1].boundingBox.vertices.map((v) => v[coordinate])
     }
 };
 
@@ -359,7 +613,14 @@ function getFulltextAnnoObjByRange(
                                         (compare[0] === "continue" || compare[1] === "continue") &&
                                         (compare[0] !== false && compare[1] !== false)
                                     ) {
-                                        result.push([new idx(0, blockIndex, paragraphIndex, wordIndex, symbolIndex), symbol, "continue"])
+                                        if (continueOptions.symbol !== undefined) {
+                                            if (compare[continueOptions.symbol] === true) {
+                                                result.push([new idx(0, blockIndex, paragraphIndex, wordIndex, symbolIndex), symbol, 'continue'])
+                                            }
+                                        }
+                                        else {
+                                            result.push([new idx(0, blockIndex, paragraphIndex, wordIndex, symbolIndex), symbol, "continue"])
+                                        }
                                     }
                                 })
                             }
@@ -442,7 +703,7 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
     const productNameArray = makeProductNameArrFromGroup(productNameGroup);
     const unitPriceArray = makeArrFromGroup(unitPriceGroup);
     const quantityArray = makeArrFromGroup(quantityGroup);
-    const amountArray = makeArrFromGroup(amountGroup);
+    const amountArray = makeAmountArrFromGroup(amountGroup);
 
     // 상품명 arr 에서 특정상품명이 발견되는 index 로 단가 수량 arr 에 undefined 삽입
     productNameArray.forEach((productName, index) => {
@@ -482,7 +743,7 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
     function makeArrFromGroup(group) {
         let arr = []
         group.forEach((item) => {
-            item[1].textStudy.split('\n').forEach((text) => { // textStudy 그냥 전부 text 로 통일하는게 좋지 않을까?
+            item[1].text.split('\n').forEach((text) => {
                 if (text !== '') {
                     arr.push(text)
                 }
@@ -497,27 +758,29 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
      * - 하나의 아이템으로 찾아야할것을 word level 로 쪼개져 찾을경우 솔루션
      * - 시작 문자열이 두자리 숫자이거나 특정메시지가 포함됬을경우만 하나의 열로 인식하도록 함
      * - 할인정보 항목이 상품명 항목과 이어붙는 경우 핸들링
+     * 
+     * 중복코드 정리 필요
      */
     function makeProductNameArrFromGroup(group) {
         // 그룹 요소중에 word level 로 쪼개서 찾아진내용은 순서대로 이어붙인다음 \n 검사해야함.
         let arr = []
-        let wordToParagraph = []
+        let wordToParagraph = [] // disorderly 등장하는 word 를 재대로 이어붙이기위해 인덱스별 배열에 담아줌
         let tempPageIdx = NaN
         let tempBlockIdx = NaN
         let tempParagraphIdx = NaN
         group.forEach((item) => {
             const {pageIdx, blockIdx, paragraphIdx, wordIdx} = item[0]
-            if (wordIdx !== undefined) {
+            if (wordIdx !== undefined) { // word level 로 쪼개져 찾아진내용이면
                 if (tempPageIdx === NaN && tempBlockIdx === NaN && tempParagraphIdx === NaN) {
-                    wordToParagraph[wordIdx] = item[1].textStudy
+                    wordToParagraph[wordIdx] = item[1].text
                     tempPageIdx = pageIdx
                     tempBlockIdx = blockIdx
                     tempParagraphIdx = paragraphIdx
                 }
                 else if (tempPageIdx === pageIdx && tempBlockIdx === blockIdx && tempParagraphIdx === paragraphIdx) {
-                    wordToParagraph[wordIdx] = item[1].textStudy
+                    wordToParagraph[wordIdx] = item[1].text
                 }
-                else {
+                else { // 이어서 새로운 paragraph 의 word 나열이 시작되면
                     wordToParagraph.join('').split('\n').forEach((text) => {
                         if (text !== '') {
                             if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
@@ -535,14 +798,14 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
                         }
                     })
                     wordToParagraph = []
-                    wordToParagraph[wordIdx] = item[1].textStudy
+                    wordToParagraph[wordIdx] = item[1].text
                     tempPageIdx = pageIdx
                     tempBlockIdx = blockIdx
                     tempParagraphIdx = paragraphIdx
                 }
             }
-            else {
-                if (wordToParagraph.length > 0) {
+            else { // 정상 paragraph level 로 찾아진내용이면
+                if (wordToParagraph.length > 0) { // 이전에 word level 로 쪼개져 찾아진내용이 있으면 처리하고 진행
                     wordToParagraph.join('').split('\n').forEach((text) => {
                         if (text !== '') {
                             if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
@@ -561,7 +824,7 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
                     })
                     wordToParagraph = []
                 }
-                item[1].textStudy.split('\n').forEach((text) => {
+                item[1].text.split('\n').forEach((text) => {
                     if (text !== '') {
                         if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
                             if (/^[0-9]{2}/.test(text) && /쿠폰할인+$|행사할인+$/.test(text)) {
@@ -578,6 +841,65 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
                     }
                 })
             };
+        })
+        return arr
+    };
+
+    /**
+     * amount 전용 툴
+     * 
+     * - symbol 레벨로 쪼개져 찾는경우 솔루션
+     * 
+     */
+    function makeAmountArrFromGroup(group) {
+        let arr = []
+        let symbolToWord = []
+        let tempPageIdx = NaN
+        let tempBlockIdx = NaN
+        let tempParagraphIdx = NaN
+        let tempWordIdx = NaN
+        group.forEach((item) => {
+            const {pageIdx, blockIdx, paragraphIdx, wordIdx, symbolIdx} = item[0]
+            if (symbolIdx !== undefined) {
+                if (tempPageIdx === NaN && tempBlockIdx === NaN && tempParagraphIdx === NaN && tempWordIdx === NaN) {
+                    symbolToWord[symbolIdx] = item[1].text
+                    tempPageIdx = pageIdx
+                    tempBlockIdx = blockIdx
+                    tempParagraphIdx = paragraphIdx
+                    tempWordIdx = wordIdx
+                }
+                else if (tempPageIdx === pageIdx && tempBlockIdx === blockIdx && tempParagraphIdx === paragraphIdx && tempWordIdx === wordIdx) {
+                    symbolToWord[symbolIdx] = item[1].text
+                }
+                else {
+                    symbolToWord.join('').split('\n').forEach((text) => {
+                        if (text !== '') {
+                            arr.push(text)
+                        }
+                    })
+                    symbolToWord = []
+                    symbolToWord[symbolIdx] = item[1].text
+                    tempPageIdx = pageIdx
+                    tempBlockIdx = blockIdx
+                    tempParagraphIdx = paragraphIdx
+                    tempWordIdx = wordIdx
+                }
+            }
+            else {
+                if (symbolToWord.length > 0) {
+                    symbolToWord.join('').split('\n').forEach((text) => {
+                        if (text !== '') {
+                            arr.push(text)
+                        }
+                    })
+                    symbolToWord = []
+                }
+                item[1].text.split('\n').forEach((text) => {
+                    if (text !== '') {
+                        arr.push(text)
+                    }
+                })
+            }
         })
         return arr
     };
@@ -606,13 +928,15 @@ function deleteSpacesEachEleOfFrontAndBackInArr(arr) {
 
 /**
  * #### 인자로 받은 배열의 요소에 모든쉼표를 제거
+ * 
+ * - 쉼표를 포인트(.)로 찾아버린것 제거
  */
 function deleteAllCommaEachEleInArr(arr) {
     return arr.map((ele) => {
         if (ele === undefined) {
             return undefined
         }
-        return ele.replace(/,/g, '')
+        return ele.replace(/,|\./g, '')
     })
 };
 

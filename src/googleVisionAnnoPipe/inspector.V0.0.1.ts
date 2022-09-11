@@ -6,7 +6,7 @@ export = function(annotateResult) {
     textAnnotationsInspector(textAnnotations);
 
     // fullTextAnnotation 검사하며 fullTextAnnotationPlusStudy 만들기
-    // fullTextAnnotationPlusStudy 은 pages, blocks, paragraphs, words, symbols 각각이 하위요소의 text 내용을 전부 합친 문자열을 textStudy 로 가진다.
+    // fullTextAnnotationPlusStudy 은 pages, blocks, paragraphs, words, symbols 각각이 하위요소의 text 내용을 전부 합친 문자열을 text(Study) 로 가진다.
     const fullTextAnnotationPlusStudy = fullTextAnnotationInspector(annotateResult[0].fullTextAnnotation);
 
     return {textAnnotations, fullTextAnnotationPlusStudy};
@@ -129,22 +129,22 @@ function fullTextAnnotationInspector(fullTextAnnotation) {
                     });
                     // fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].paragraphs[paragraphIdx].words[wordIdx].study = {}
                     // fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].paragraphs[paragraphIdx].words[wordIdx].study.text = wordText
-                    fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].paragraphs[paragraphIdx].words[wordIdx].textStudy = wordText
+                    fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].paragraphs[paragraphIdx].words[wordIdx].text = wordText
                     paragraphText += wordText
                 });
                 // fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].paragraphs[paragraphIdx].study = {}
                 // fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].paragraphs[paragraphIdx].study.text = paragraphText
-                fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].paragraphs[paragraphIdx].textStudy = paragraphText
+                fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].paragraphs[paragraphIdx].text = paragraphText
                 blockText += paragraphText
             });
             // fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].study = {}
             // fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].study.text = blockText
-            fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].textStudy = blockText
+            fullTextAnnotationPlusStudy.pages[pageIdx].blocks[blockIdx].text = blockText
             pageText += blockText
         });
         // fullTextAnnotationPlusStudy.pages[pageIdx].study = {}
         // fullTextAnnotationPlusStudy.pages[pageIdx].study.text = pageText
-        fullTextAnnotationPlusStudy.pages[pageIdx].textStudy = pageText
+        fullTextAnnotationPlusStudy.pages[pageIdx].text = pageText
     });
     if (result.length === 0) {
         console.log("fullTextAnnotation 예외 없음")
