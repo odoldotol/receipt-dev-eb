@@ -155,7 +155,7 @@ export class ReciptToSheetService {
             email 전송 성공여부도 저장된다.
         */
 
-        return {email,annotateResult}; // 앞의 모든 프로세스에 대한 결과나 상태를 알 수 있는 객체를 반환하기
+        return {email,receiptObject};
     };
 
     async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {

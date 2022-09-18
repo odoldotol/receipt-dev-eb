@@ -1,4 +1,4 @@
-import getReceiptObject from '../receiptObj/get.V0.0.1';
+import getReceiptObject from '../receiptObj/get.V0.1.1';
 import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
 import { readFileSync } from 'fs';
 
@@ -37,8 +37,8 @@ while (true) {
         }
     } catch (e) {
         if (e.code === 'ENOENT') {
-            console.log('-------- Test Break --------')
             console.log(e.message)
+            console.log('-------- Test Break --------')
             break
         }
         resultArray.push(e)

@@ -1,4 +1,4 @@
-// version 0.0.1
+// version 0.1.1
 
 // 구굴 비젼 API 의 "TEXT_DETECTION", "DOCUMENT_TEXT_DETECTION" 기능을 포함한 annotateResult: [google.cloud.vision.v1.IAnnotateImageResponse] 로부터 데이터를 얻습니다.
 // 인자 annotateResult 는 googleVisionAnnoPipe/inspector.V0.0.1 를 통해 검증되어야 합니다.
@@ -7,18 +7,25 @@
 // 영수증의 구조분석과 요소간 상대적 위치를 기준으로 텍스트요소들을 찾아내는 솔루션입니다.
 // 홈플러스 단일 술루션입니다.
 
-// 홈플러스 1번 영수증을 기반으로 시작했다.
+// get.V0.0.1 에서 출발했습니다.
 /** 
  * 테스트영수증 커버리지
  * 
  * - 구매 목록 리스트
- * 홈플러스 1-7
+ * 홈플러스 : 1-7
+ * 
+ * - 맨위 Homplus 상표
+ * 
+ * - 맨위 지점명, 주소, 전화번호 등
+ * 
+ * - ReceiptInfo (년/월/일/ 시[요일], TM:, NO:)
+ * 
  */
 
 /** 제약적인 가정
  * 
  * 영수증은 전체가 보이게 하나의 사진으로 하나의 영수증만 전달되었음.
- * 영수증은 거의 수평으로 활영되었음.
+ * 영수증은 거의 수평으로 활영되었음. (대략 2도이내)
  * 상품명 단가 수량 금액 요소간의 y축 거리는 어떠한 다른 요소들과의 y축 거리보다 가까움.
  * 상품명 단가 수량 금액 요소들 모두 구글 비젼API가 오타없이 정확히 찾아냈음 (비록 오답인 요소가 함께 찾아졌을지라도).
  * 위에서 언급한 오답인 요소는 정답요소와 완전한 수평위치에 있을 수 없음.
@@ -42,13 +49,6 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
     const {textAnnotations, fullTextAnnotationPlusStudy} = annotateResult;
 
     // 영수증의 기울기나 상태에 따라 범위를 조절해야할 수도 있음. 일단은 고정솔루션으로 최대한 커버해보기
-    /* const {
-        productNameRangeX,
-        unitPriceRangeX,
-        quantityRangeX,
-        amountRangeX,
-        itemRangeY
-    } = findItemRange(textAnnotations, fullTextAnnotationPlusStudy); */
 
     const { // 먼저 단가까지만 찾을준비
         productNameRangeX,
@@ -58,7 +58,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         amount
     } = findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy);
 
-    // 상품명, 단가, 수량, 금액 요소들을 모아놓은 배열을 만들고 y축에대해 정렬.
+    // 상품명, 단가 요소들을 모아놓은 배열을 만들고 y축에대해 정렬.
     const productNameGroup = sortGroupAscByY(
         getFulltextAnnoObjByRange(
             fullTextAnnotationPlusStudy,
@@ -76,20 +76,13 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
             {includeWords: true, word: 1}
         )
     );
-    // const quantityGroup = sortGroupAscByY(
-    //     getFulltextAnnoObjByRange(
-    //         fullTextAnnotationPlusStudy,
-    //         quantityRangeX,
-    //         itemRangeY,
-    //         false
-    //     )
-    // );
 
     const { // 수량, 금약 찾을 준비
         quantityRangeX,
         amountRangeX
     } = findItemRangeQuantityAmount(textAnnotations, quantity, amount, unitPriceGroup);
 
+    // 수량, 금액 요소들을 모아놓은 배열을 만들고 y축에대해 정렬.
     const quantityGroup = sortGroupAscByY(
         getFulltextAnnoObjByRange(
             fullTextAnnotationPlusStudy,
@@ -99,15 +92,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
             {includeSymbols: false}
         )
     );
-    // const amountGroup = sortGroupAscByY(
-    //     getFulltextAnnoObjByRange(
-    //         fullTextAnnotationPlusStudy,
-    //         amountRangeX,
-    //         itemRangeY,
-    //         false,
-    //         {includeWords: true, word: 1}
-    //     )
-    // );
+
     const amountGroup = sortGroupAscByY(
         getFulltextAnnoObjByRange(
             fullTextAnnotationPlusStudy,
@@ -342,7 +327,7 @@ function findItemRange(textAnnotations, fullTextAnnotationPlusStudy) {
  * 3. 1,2 번에서 찾은걸로 y축 범위 결정하기.
  * 4. 상품명, 단가 가로축 범위 결정하기.
  */
- function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy) {
+function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy) {
 
     // 1. 상품명 단가 수량 금액 라인 찾기
     const productName = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /상품명/)
@@ -408,14 +393,29 @@ function findItemRange(textAnnotations, fullTextAnnotationPlusStudy) {
         itemYBottomPin = taxExemptionMsg
     }
 
+    //
+    const receiptInfoTopPin = [
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /단(?=[ ]정상|\W[ ]정상)/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /정상(?=[ ]미개봉|[ ]\W미개봉|\W미개봉|미개봉)/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /미개봉(?=[ ]상품|\W[ ]상품|\W상품|상품)/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /상품(?=[ ]영수증|\W[ ]영수증)/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /영수증(?=[ ]결제카드|\W결제카드|[ ]\W결제카드|\W[ ]결제카드|결제카드)/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /결제카드(?=[ ]지참|지참)/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]{1}\s*[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]{1}\s*[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]{1}\s*[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]{1}\s*[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]{1}\s*[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]{1}\s*[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]{1}\s*[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]{1}\s+/)
+    ]
+    // console.log("receiptInfoTopPin", receiptInfoTopPin[0], receiptInfoTopPin[1], receiptInfoTopPin[2], receiptInfoTopPin[3], receiptInfoTopPin[4], receiptInfoTopPin[5])
+    console.log("receiptInfoTopPin", receiptInfoTopPin[0])
+
+
     // 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
     const productNameYs = getXorYArr(productName[productNameIndex], "y")
     const unitPriceYs = getXorYArr(unitPrice[unitPriceIndex], "y")
     const quantityYs = getXorYArr(quantity[quantityIndex], "y")
     const amountYs = getXorYArr(amount[amountIndex], "y")
-    const minY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
+    const itemMinY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
+    const receiptInfoMaxY = Math.min(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
     // maxY 는 itemYBottomPin 의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
-    const maxY = getXorYArr(itemYBottomPin[0], "y")
+    const itemMaxY = getXorYArr(itemYBottomPin[0], "y")
         .sort((a, b) => a - b)[1]
 
     // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
@@ -436,7 +436,7 @@ function findItemRange(textAnnotations, fullTextAnnotationPlusStudy) {
     // const amountMaxX = Math.max(...getXorYArr(amount[amountIndex], "x"))
     // const amountRangeX = [amountMinX,amountMaxX]
     // const amountRangeX = [(quantityMaxX+amountMinX)/2,textAnnotationsMaxX]
-    const itemRangeY = [minY,maxY]
+    const itemRangeY = [itemMinY,itemMaxY]
 
     return {productNameRangeX, unitPriceRangeX, itemRangeY, quantity:quantity[quantityIndex], amount:amount[amountIndex]}
 };
@@ -446,7 +446,7 @@ function findItemRange(textAnnotations, fullTextAnnotationPlusStudy) {
  * 
  * 1. 수량 금액 가로축 범위 결정하기.
  */
- function findItemRangeQuantityAmount(textAnnotations, quantity, amount, unitPriceGroup) {
+function findItemRangeQuantityAmount(textAnnotations, quantity, amount, unitPriceGroup) {
 
     /* // 1. 상품명 단가 수량 금액 라인 찾기
     const productName = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /상품명/)
@@ -520,7 +520,7 @@ function findItemRange(textAnnotations, fullTextAnnotationPlusStudy) {
     const minY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
     // maxY 는 itemYBottomPin 의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
     const maxY = getXorYArr(itemYBottomPin[0], "y")
-       .sort((a, b) => a - b)[1] */
+    .sort((a, b) => a - b)[1] */
 
     // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
     // const unitPriceAverageX = calAverageXorY(unitPrice[unitPriceIndex], "x")
@@ -643,7 +643,7 @@ function getFulltextAnnoObjByRange(
 
     /**
      * 완전 속해있으면 true, 완전 분리되어있으면 false, 걸쳐있으면 "continue" 반환
-    */
+ */
     function compareVertices(vertices) {
         const verticesX = []
         const verticesY = []
@@ -961,9 +961,9 @@ function makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountA
             receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
         }
         else {
-        // .|* 으로 시작하는것 발견하면 taxExemption = true 주고 .|* 제거하고 space 제거하기
+        // .|*|: 으로 시작하는것 발견하면 taxExemption = true 주고 .|*|: 제거하고 space 제거하기
             let taxExemption = false;
-            if (productName.charAt(0) === "." || productName.charAt(0) === "*") {
+            if (productName.charAt(0) === "." || productName.charAt(0) === "*" || productName.charAt(0) === ":") {
                 productName = productName.replace(/^./, '').replace(/^[ ]+/g, '')
                 taxExemption = true;
             }

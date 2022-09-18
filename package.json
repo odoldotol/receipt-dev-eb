@@ -23,7 +23,9 @@
     "study:get": "ts-node src/googleVisionAnnoStudy/getValue.ts",
     "lab": "ts-node src/googleVisionAnnoLab/lab.ts",
     "lab:test": "ts-node src/googleVisionAnnoLab/test.ts",
-    "lab:save": "ts-node src/googleVisionAnnoLab/expectReceipt-save.ts"
+    "lab:save": "ts-node src/googleVisionAnnoLab/expectReceipt-save.ts",
+    "lab:test:dev": "ts-node src/googleVisionAnnoLab/test.dev.ts"
+
 
 
   },
