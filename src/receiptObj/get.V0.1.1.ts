@@ -40,7 +40,7 @@
  */
 
 import { MultipartBodyDto } from 'src/recipt-to-sheet/dto/multipartBody.dto';
-import {ReceiptItem, Discount, ItemReadFromReceipt, Receipt, Provider} from './define.V0.0.1';
+import {ReceiptItem, Discount, ItemReadFromReceipt, Receipt, Provider, ReceiptReadFromReceipt} from './define.V0.1.1';
 /**
  * 
  */
@@ -117,7 +117,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
     // console.log('unitPriceGroup', unitPriceGroup);
     // console.log('quantityGroup', quantityGroup);
     // console.log('amountGroup', amountGroup);
-    console.log('receiptInfoGroup', receiptInfoGroup);
+    // console.log('receiptInfoGroup', receiptInfoGroup);
 
     // 상품명, 단가, 수량, 금액 요소들의 텍스트들을 행열에 맞춰 모두 같은 길이의 배열로 만들기.
     const textArrays = getTextArraysFromGroups(
@@ -149,7 +149,12 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
     const receiptInfo = getReceiptInfoFromGroup(receiptInfoGroup);
 
     // text
-    const receipt = new Receipt(new Provider(multipartBody.emailAddress), receiptItemArray);
+    const receipt = new Receipt(
+        new Provider(multipartBody.emailAddress),
+        receiptItemArray,
+        new ReceiptReadFromReceipt(receiptInfo.receiptDate)
+    );
+    // console.log('receipt', receipt);
     return receipt;
 };
 
@@ -916,32 +921,32 @@ function makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountA
 /**
  * #### 영수증 정보(시간, TM, NO 찾기)
  * 
- * 
+ * 일단은 시간정보만 처리함
  */
 function getReceiptInfoFromGroup(receiptInfoGroup) {
     let date = null
     let time = null
-    let tm = null
-    let no = null
+    // let tm = null
+    // let no = null
     for(let i=0; i<receiptInfoGroup.length; i++) {
         if (date === null) {
             date = /\d{4}[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d{1,2}[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d{2}/.exec(receiptInfoGroup[i][1].text)
         }
         if (time === null) {
-            time = /\d{2}[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d{2}[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d{2}/.exec(receiptInfoGroup[i][1].text)
+            time = /(?<!\d)\d{2}[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d{2}[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d{2}/.exec(receiptInfoGroup[i][1].text)
         }
-        if (tm === null) {
-            tm = /TM[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d+/.exec(receiptInfoGroup[i][1].text)
-        }
-        if (no === null) {
-            no = /NO[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d+/.exec(receiptInfoGroup[i][1].text)
-        }
-        if (date !== null && time !== null && tm !== null && no !== null) {
+        // if (tm === null) {
+        //     tm = /TM[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d+/.exec(receiptInfoGroup[i][1].text)
+        // }
+        // if (no === null) {
+        //     no = /NO[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d+/.exec(receiptInfoGroup[i][1].text)
+        // }
+        if (date !== null && time !== null/* && tm !== null && no !== null*/) {
             break
         }
     }
     const receiptDate = new Date(date[0]+" "+time[0])
-    const receiptTm = tm[0].slice(3)
-    const receiptNo = no[0].slice(3)
-    return {receiptDate, receiptTm, receiptNo}
+    // const receiptTm = tm[0].slice(3)
+    // const receiptNo = no[0].slice(3)
+    return {receiptDate/*, receiptTm, receiptNo*/}
 }

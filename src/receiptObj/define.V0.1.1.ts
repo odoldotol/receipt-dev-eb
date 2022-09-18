@@ -68,7 +68,9 @@ class ReceiptItem {
 class ReceiptReadFromReceipt {
 
     constructor(
-        //시간
+        public date: Date,
+        public tm?: string,
+        public no?: string,
         //총가격
         //할인
         //결제
@@ -94,7 +96,7 @@ class Receipt {
     constructor(
         public provider: Provider,
         public itemArray: ReceiptItem[],
-        public readFromReceipt?: ReceiptReadFromReceipt,
+        public readFromReceipt: ReceiptReadFromReceipt,
         public providerInput?,
         public outputRequests?: OutputRequest[],
         public imageAddress?: string,
@@ -113,4 +115,4 @@ class Receipt {
     }
 }
 
-export {ReceiptItem, Discount, ItemReadFromReceipt, Receipt, Provider}
+export {ReceiptItem, Discount, ItemReadFromReceipt, Receipt, Provider, ReceiptReadFromReceipt}
