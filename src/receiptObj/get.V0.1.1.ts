@@ -18,7 +18,16 @@
  * 
  * - 맨위 지점명, 주소, 전화번호 등
  * 
- * - ReceiptInfo (년/월/일/ 시[요일], TM:, NO:)
+ * - ReceiptInfo (년/월/일/ 시[요일], (TM:, NO: 는 읽지만, 오타문제로 저장하지 않았음. 필요한 경우 해결하기))
+ * 홈플러스 : 1-7
+ * 
+ * - 과세 부가세 면세 부분 (구매목록-상품명 에서 못읽은 면세품목 찾아낼 수 있을것같다!)
+ * 
+ * - 합계 할인 구매금액 부분 (영수증 객체안에 구매목록-총계 간 검증 매써드 넣기)
+ * 
+ * - 결제 부분
+ * 
+ * - 포인트 부분
  * 
  */
 
@@ -352,24 +361,13 @@ function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStud
     }
 
     // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
-    // const unitPriceAverageX = calAverageXorY(unitPrice[unitPriceIndex], "x")
     const unitPriceMaxX = Math.max(...getXorYArr(unitPrice[unitPriceIndex], "x"))
     const textAnnotationsMinX = Math.min(...getXorYArr(textAnnotations[0], "x", true))
     const textAnnotationsMaxX = Math.max(...getXorYArr(textAnnotations[0], "x", true))
     const textAnnotationsRangeX = [textAnnotationsMinX-1, textAnnotationsMaxX+1]
-    // const productNameRangeX = [textAnnotationsMinX,unitPriceAverageX]
     const productNameRangeX = [textAnnotationsRangeX[0],unitPriceMaxX]
     const quantityMinX = Math.min(...getXorYArr(quantity[quantityIndex], "x"))
-    // const quantityAverageX = calAverageXorY(quantity[quantityIndex], "x")
     const unitPriceRangeX = [unitPriceMaxX,quantityMinX]
-    // const unitPriceGroupMaxX = Math.max(...getXorYArr(unitPriceGroup[unitPriceIndex], "x", true)) // 단가 그룹의 맨위와 맨밑의 최대 x값
-    // const quantityMaxX = Math.max(...getXorYArr(quantity[quantityIndex], "x"))
-    // const amountMinX = Math.min(...getXorYArr(amount[amountIndex], "x"))
-    // const quantityRangeX = [quantityMinX,(quantityMaxX+amountMinX)/2]
-    // const quantityRangeX = [quantityAverageX,(quantityMaxX+amountMinX)/2]
-    // const amountMaxX = Math.max(...getXorYArr(amount[amountIndex], "x"))
-    // const amountRangeX = [amountMinX,amountMaxX]
-    // const amountRangeX = [(quantityMaxX+amountMinX)/2,textAnnotationsMaxX]
     const itemRangeY = [itemMinY,itemMaxY]
     const receiptInfoRangeY = [receiptInfoMinY,receiptInfoMaxY]
 
@@ -383,102 +381,14 @@ function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStud
  */
 function findItemRangeQuantityAmount(textAnnotationsRangeX, quantity, amount, unitPriceGroup) {
 
-    /* // 1. 상품명 단가 수량 금액 라인 찾기
-    const productName = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /상품명/)
-    const unitPrice = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /단가/)
-    const quantity = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /수량/)
-    const amount = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /금액/)
-
-    let productNameIndex: number;
-    let unitPriceIndex: number;
-    let quantityIndex: number;
-    let amountIndex: number;
-
-    let unitPriceAverageY: number;
-    let quantityAverageY: number;
-    
-    // 상품명과 단가를 비교하여 세로축이 가장 인접한것 매칭
-    let difference = 999;
-    productName.forEach((productNameEle, productNameEleIdx) => {
-        unitPrice.forEach((unitPriceEle, unitPriceEleIdx) => {
-            const productNameEleAverageY = calAverageXorY(productNameEle, "y")
-            const unitPriceEleAverageY = calAverageXorY(unitPriceEle, "y")
-            const newDifference = Math.abs(productNameEleAverageY - unitPriceEleAverageY)
-            if (newDifference < difference) {
-                difference = newDifference
-                productNameIndex = productNameEleIdx
-                unitPriceIndex = unitPriceEleIdx
-                unitPriceAverageY = unitPriceEleAverageY
-            }
-        })
-    });
-
-    // 단가를 기준으로 세로축방향으로 가장 인접한 수량 찾기
-    difference = 999;
-    quantity.forEach((quantityEle, quantityEleIdx) => {
-        const quantityEleAverageY = calAverageXorY(quantityEle, "y")
-        const newDifference = Math.abs(unitPriceAverageY - quantityEleAverageY)
-        if (newDifference < difference) {
-            difference = newDifference
-            quantityIndex = quantityEleIdx
-            quantityAverageY = quantityEleAverageY
-        }
-    });
-
-    // 수량을 기준으로 세로축방향으로 가장 인접한 금액 찾기
-    difference = 999;
-    amount.forEach((amountEle, amountEleIdx) => {
-        const amountEleAverageY = calAverageXorY(amountEle, "y")
-        const newDifference = Math.abs(quantityAverageY - amountEleAverageY)
-        if (newDifference < difference) {
-            difference = newDifference
-            amountIndex = amountEleIdx
-        }
-    }); */
-
-    /* // 2. 아이템 y축 하안선 기준요소 찾기
-    let itemYBottomPin = []
-    const taxExemptionMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /표시 상품은 부가세 면세품목입니다/)
-    if (taxExemptionMsg === null) {
-        const taxProductAmountMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /과세물품/)
-        itemYBottomPin = taxProductAmountMsg
-    }
-    else {
-        itemYBottomPin = taxExemptionMsg
-    } */
-
-    /* // 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
-    const productNameYs = getXorYArr(productName[productNameIndex], "y")
-    const unitPriceYs = getXorYArr(unitPrice[unitPriceIndex], "y")
-    const quantityYs = getXorYArr(quantity[quantityIndex], "y")
-    const amountYs = getXorYArr(amount[amountIndex], "y")
-    const minY = Math.max(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
-    // maxY 는 itemYBottomPin 의 y 값 중에서 2번째로 작은값 (대체적으로 수평인 다양한 기울기에서 이게 기하학적으로 제일 안전하다)
-    const maxY = getXorYArr(itemYBottomPin[0], "y")
-    .sort((a, b) => a - b)[1] */
-
-    // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
-    // const unitPriceAverageX = calAverageXorY(unitPrice[unitPriceIndex], "x")
-    // const unitPriceMaxX = Math.max(...getXorYArr(unitPrice[unitPriceIndex], "x"))
-    // const textAnnotationsMinX = Math.min(...getXorYArr(textAnnotations[0], "x", true))
-    // const textAnnotationsMaxX = Math.max(...getXorYArr(textAnnotations[0], "x", true))
-    // const productNameRangeX = [textAnnotationsMinX,unitPriceAverageX]
-    // const productNameRangeX = [textAnnotationsMinX,unitPriceMaxX]
-    // const quantityMinX = Math.min(...getXorYArr(quantity[quantityIndex], "x"))
-    // const quantityAverageX = calAverageXorY(quantity, "x")
-    // const unitPriceRangeX = [unitPriceMaxX,quantityMinX]
     const unitPriceGroupMaxX = Math.max( // 단가 그룹의 맨위와 맨밑의 최대 x값
         Math.max(...getXorYArr(unitPriceGroup[0], "x")),
         Math.max(...getXorYArr(unitPriceGroup[unitPriceGroup.length-1], "x"))
     )
     const quantityMaxX = Math.max(...getXorYArr(quantity, "x"))
     const amountMinX = Math.min(...getXorYArr(amount, "x"))
-    // const quantityRangeX = [quantityMinX,(quantityMaxX+amountMinX)/2]
     const quantityRangeX = [unitPriceGroupMaxX,(quantityMaxX+amountMinX)/2]
-    // const amountMaxX = Math.max(...getXorYArr(amount[amountIndex], "x"))
-    // const amountRangeX = [amountMinX,amountMaxX]
     const amountRangeX = [(quantityMaxX+amountMinX)/2,textAnnotationsRangeX[1]]
-    // const itemRangeY = [minY,maxY]
 
     return {quantityRangeX, amountRangeX}
 };
