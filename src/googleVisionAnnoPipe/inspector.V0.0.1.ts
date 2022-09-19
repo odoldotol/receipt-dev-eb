@@ -33,7 +33,7 @@ function textAnnotationsInspector(textAnnotations) {
         }
     })
     if (result.length === 0) {
-        console.log("textAnnotations 예외 없음")
+        // console.log("textAnnotations 예외 없음")
     }
     else {
         console.log("textAnnotations 예외 발견")
@@ -147,7 +147,7 @@ function fullTextAnnotationInspector(fullTextAnnotation) {
         fullTextAnnotationPlusStudy.pages[pageIdx].text = pageText
     });
     if (result.length === 0) {
-        console.log("fullTextAnnotation 예외 없음")
+        // console.log("fullTextAnnotation 예외 없음")
     } else {
         console.log("fullTextAnnotation 예외 발견")
         console.log(result)

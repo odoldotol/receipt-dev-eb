@@ -5,7 +5,7 @@ import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
 import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
-import getReceiptObject from '../receiptObj/get.V0.0.1';
+import getReceiptObject from '../receiptObj/get.V0.1.1';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { writeFile } from 'fs';
 
@@ -44,6 +44,7 @@ export class ReciptToSheetService {
 
     createAttachments(receiptObject, sheetFormat) {
         let attachment
+        const date = receiptObject.readFromReceipt.date
         if (sheetFormat === 'csv') {
             // let csvData = "0,1,2,3,4,5,6,7,8,9\n"
             // textArr[0] = '"'+textArr[0]+'"'
@@ -89,24 +90,25 @@ export class ReciptToSheetService {
             const wb = xlsx.utils.book_new()
             const ws = xlsx.utils.json_to_sheet(rowObjArr)
 
-            xlsx.utils.book_append_sheet(wb, ws, "somewhen-someMart") // 결제일, 마트
+            xlsx.utils.book_append_sheet(wb, ws, `${date.toLocaleDateString('ko-KR', {timeZone: 'Asia/Seoul'})}-Homeplus`) // 결제일, 마트
             attachment = xlsx.write(wb, {type: 'base64', bookType: 'xlsx'})
         };
 
         return [{
             content: attachment,
-            filename: "somewhen-someMart." + sheetFormat, // 결제일, 마트, 시트포멧 // 복수의 이미지를 처리하게되면 신청일+???.xlsx ??
+            filename: `${date.toLocaleString('ko-KR', {timeZone: 'Asia/Seoul'})}-Homeplus.` + sheetFormat, // 마트, 시트포멧 // 복수의 이미지를 처리하게되면 신청일+???.xlsx ??
             type: "application/" + sheetFormat,
             disposition: "attachment"
         }]
     };
 
-    async sendEmail(attachments, emailAddress) {
+    async sendEmail(attachments, receiptObject) {
+        const date = receiptObject.readFromReceipt.date
         sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
         const msg = {
-            to: emailAddress, // recipient
+            to: receiptObject.provider.emailAddress, // recipient // 나중엔 output 에서
             from: 'service.lygo@gmail.com', // verified sender
-            subject: '00년 00월 00일 결제하신 홈플러스 영수증의 엑셀파일입니다.', // 결제일, 마트, 시트포멧
+            subject: `${date.getFullYear()}년 ${date.getMonth()+1}월 ${date.getDate()}일 결제하신 홈플러스 영수증의 엑셀파일입니다.`, // 마트, 시트포멧
             // text: 'www.recipto.com',
             html: '<strong>www.receipto.com</strong>',
             attachments
@@ -148,7 +150,7 @@ export class ReciptToSheetService {
         const attachments = this.createAttachments(receiptObject, multipartBody.sheetFormat);
         
         // 이메일 보내기
-        const email = await this.sendEmail(attachments, multipartBody.emailAddress);
+        const email = await this.sendEmail(attachments, receiptObject);
         
         /* 몽고디비에 저장하기 (optional, potentially essential)
             항목 객체들이 담긴 배열과 그밖의 필요 데이터들을 도큐먼트로 저장하면된다.
