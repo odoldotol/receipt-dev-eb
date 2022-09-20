@@ -130,6 +130,8 @@ export class ReciptToSheetService {
     async processingTransferredReceipt(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
 
         // 영수증인지 확인하기 (optional, potentially essential)
+        // 생각해보니, 거꾸로였다!! 잘 만들어진 어떤 특정 영수증 솔루션에 정상 해독되면 그 특정 영수증이라고 판단하는게 더 나을수도있겠네!?
+        // 우선은 영수증 이미지를 받을때 어떤 영수증인지 정보가 오게해야하고, 그게 안오거나 불확실하는걸 생각해서 저리 순서.과정을 짜자
 
         // AWS | Google Cloud 에 이미지 업로드 (optional, potentially necessary) (구글 클라우드 사용하면 비젼돌리는것과 합쳐서 한방에 처리가능하지 않을까?)
 

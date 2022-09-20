@@ -69,6 +69,11 @@ class ReceiptReadFromReceipt {
 
     constructor(
         public date: Date,
+        public name: string,
+        public tel: string,
+        public address: string,
+        public owner: string,
+        public businessNumber: string,
         public tm?: string,
         public no?: string,
         //총가격

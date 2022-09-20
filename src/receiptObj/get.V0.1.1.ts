@@ -17,6 +17,7 @@
  * - 맨위 Homplus 상표
  * 
  * - 맨위 지점명, 주소, 전화번호 등
+ * 홈플러스 : 1-7
  * 
  * - ReceiptInfo (년/월/일/ 시[요일], (TM:, NO: 는 읽지만, 오타문제로 저장하지 않았음. 필요한 경우 해결하기))
  * 홈플러스 : 1-7
@@ -65,6 +66,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         textAnnotationsRangeX,
         itemRangeY,
         receiptInfoRangeY,
+        shopInfoRangeY,
         quantity,
         amount
     } = findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy);
@@ -94,6 +96,16 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         textAnnotationsRangeX,
         receiptInfoRangeY,
         false
+    );
+
+    // ShopInfoGroup
+    const shopInfoGroup = sortGroupAscByY(
+        getFulltextAnnoObjByRange(
+            fullTextAnnotationPlusStudy,
+            textAnnotationsRangeX,
+            shopInfoRangeY,
+            false
+        )
     );
 
     const { // 수량, 금약 찾을 준비
@@ -157,15 +169,33 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
     // ReceiptInfoGroup에서 ReceiptInfo 추출하기
     const receiptInfo = getReceiptInfoFromGroup(receiptInfoGroup);
 
+    // ShopInfoGroup에서 ShopInfo 추출하기
+    const {
+        name,
+        tel,
+        address,
+        owner,
+        businessNumber
+    } = getShopInfoFromGroup(shopInfoGroup);
+
     // text
     const receipt = new Receipt(
         new Provider(multipartBody.emailAddress),
         receiptItemArray,
-        new ReceiptReadFromReceipt(receiptInfo.receiptDate)
+        new ReceiptReadFromReceipt(
+            receiptInfo.receiptDate,
+            name,
+            tel,
+            address,
+            owner,
+            businessNumber,
+        )
     );
-    // console.log('receipt', receipt);
+    console.log('receipt', receipt);
     return receipt;
 };
+
+/* -#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#- */
 
 class idx { // 오직, 해석과 Dev편의성을 위한 놈
     constructor(
@@ -325,7 +355,7 @@ function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStud
     const itemMaxY = getXorYArr(itemYBottomPin[0], "y")
     .sort((a, b) => a - b)[1]
     
-    // receiptInfo Rango 찾기
+    // receiptInfo Range 찾기
     const receiptInfoMaxY = Math.min(...productNameYs, ...unitPriceYs, ...quantityYs, ...amountYs)
     // receiptInfo TopPin 찾고 receiptInfo 의 MinY 찾기
     let receiptInfoMinY = 0
@@ -360,18 +390,43 @@ function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStud
         receiptInfoMinY = calAverageXorY(receiptInfoTopPin[0], "y")
     }
 
+    let shopInfoMaxY = receiptInfoMinY;
+    // 아래 각각 요소의 배열마다 Y의 평균값(=>최대값)중 최소값을 구하고 그 최소값이 shopInfoMaxY 보다 작으면 shopInfoMaxY 에 할당
+    // 위 평균값을 최대값으로 수정하면 쓸때없는게 간혹 포함되긴하는데 여기에서는 누락을 막는것만 신경쓰면 되서 괜찮음
+    [
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /교환/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /환불/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /결제/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /변경/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /구매/),
+        getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /점포/),
+    ].forEach((eleArr) => {
+        if (eleArr !== null) {
+            const eleArrMaxYs = eleArr.reduce((acc, cur) => {
+                acc.push(Math.max(...getXorYArr(cur, "y")))
+                return acc
+            }, [])
+            const eleArrMinY = Math.min(...eleArrMaxYs)
+            if (eleArrMinY < shopInfoMaxY) {
+                shopInfoMaxY = eleArrMinY
+            }
+        }
+    })
+
     // 4. 상품명 단가 수량 금액들의 가로축 범위 결정하기
     const unitPriceMaxX = Math.max(...getXorYArr(unitPrice[unitPriceIndex], "x"))
     const textAnnotationsMinX = Math.min(...getXorYArr(textAnnotations[0], "x", true))
     const textAnnotationsMaxX = Math.max(...getXorYArr(textAnnotations[0], "x", true))
+    const textAnnotationsMinY = Math.min(...getXorYArr(textAnnotations[0], "y", true))
     const textAnnotationsRangeX = [textAnnotationsMinX-1, textAnnotationsMaxX+1]
     const productNameRangeX = [textAnnotationsRangeX[0],unitPriceMaxX]
     const quantityMinX = Math.min(...getXorYArr(quantity[quantityIndex], "x"))
     const unitPriceRangeX = [unitPriceMaxX,quantityMinX]
     const itemRangeY = [itemMinY,itemMaxY]
     const receiptInfoRangeY = [receiptInfoMinY,receiptInfoMaxY]
+    const shopInfoRangeY = [textAnnotationsMinY-1,shopInfoMaxY]
 
-    return {productNameRangeX, unitPriceRangeX, textAnnotationsRangeX, itemRangeY, receiptInfoRangeY, quantity:quantity[quantityIndex], amount:amount[amountIndex]}
+    return {productNameRangeX, unitPriceRangeX, textAnnotationsRangeX, itemRangeY, receiptInfoRangeY, shopInfoRangeY, quantity:quantity[quantityIndex], amount:amount[amountIndex]}
 };
 
 /**
@@ -615,33 +670,29 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
         group.forEach((item) => {
             const {pageIdx, blockIdx, paragraphIdx, wordIdx} = item[0]
             if (wordIdx !== undefined) { // word level 로 쪼개져 찾아진내용이면
-                if (tempPageIdx === NaN && tempBlockIdx === NaN && tempParagraphIdx === NaN) {
-                    wordToParagraph[wordIdx] = item[1].text
-                    tempPageIdx = pageIdx
-                    tempBlockIdx = blockIdx
-                    tempParagraphIdx = paragraphIdx
-                }
-                else if (tempPageIdx === pageIdx && tempBlockIdx === blockIdx && tempParagraphIdx === paragraphIdx) {
+                if (tempPageIdx === pageIdx && tempBlockIdx === blockIdx && tempParagraphIdx === paragraphIdx) {
                     wordToParagraph[wordIdx] = item[1].text
                 }
                 else { // 이어서 새로운 paragraph 의 word 나열이 시작되면
-                    wordToParagraph.join('').split('\n').forEach((text) => {
-                        if (text !== '') {
-                            if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
-                                if (/^[0-9]{2}/.test(text) && /쿠폰할인+$|행사할인+$/.test(text)) {
-                                    arr.push(text.slice(0, text.length-4))
-                                    arr.push(text.slice(text.length-4))
+                    if (wordToParagraph.length > 0) {
+                        wordToParagraph.join('').split('\n').forEach((text) => {
+                            if (text !== '') {
+                                if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
+                                    if (/^[0-9]{2}/.test(text) && /쿠폰할인+$|행사할인+$/.test(text)) {
+                                        arr.push(text.slice(0, text.length-4))
+                                        arr.push(text.slice(text.length-4))
+                                    }
+                                    else {
+                                        arr.push(text)
+                                    }
                                 }
                                 else {
-                                    arr.push(text)
+                                    arr[arr.length-1] += text
                                 }
                             }
-                            else {
-                                arr[arr.length-1] += text
-                            }
-                        }
-                    })
-                    wordToParagraph = []
+                        })
+                        wordToParagraph = []
+                    }
                     wordToParagraph[wordIdx] = item[1].text
                     tempPageIdx = pageIdx
                     tempBlockIdx = blockIdx
@@ -686,6 +737,25 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
                 })
             };
         })
+        if (wordToParagraph.length > 0) {
+            wordToParagraph.join('').split('\n').forEach((text) => {
+                if (text !== '') {
+                    if (/^[0-9]{2}/.test(text) || text.includes("행사할인") || text.includes("쿠폰할인") || text.includes("카드할인")) {
+                        if (/^[0-9]{2}/.test(text) && /쿠폰할인+$|행사할인+$/.test(text)) {
+                            arr.push(text.slice(0, text.length-4))
+                            arr.push(text.slice(text.length-4))
+                        }
+                        else {
+                            arr.push(text)
+                        }
+                    }
+                    else {
+                        arr[arr.length-1] += text
+                    }
+                }
+            })
+            wordToParagraph = []
+        }
         return arr
     };
 
@@ -705,23 +775,18 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
         group.forEach((item) => {
             const {pageIdx, blockIdx, paragraphIdx, wordIdx, symbolIdx} = item[0]
             if (symbolIdx !== undefined) {
-                if (tempPageIdx === NaN && tempBlockIdx === NaN && tempParagraphIdx === NaN && tempWordIdx === NaN) {
-                    symbolToWord[symbolIdx] = item[1].text
-                    tempPageIdx = pageIdx
-                    tempBlockIdx = blockIdx
-                    tempParagraphIdx = paragraphIdx
-                    tempWordIdx = wordIdx
-                }
-                else if (tempPageIdx === pageIdx && tempBlockIdx === blockIdx && tempParagraphIdx === paragraphIdx && tempWordIdx === wordIdx) {
+                if (tempPageIdx === pageIdx && tempBlockIdx === blockIdx && tempParagraphIdx === paragraphIdx && tempWordIdx === wordIdx) {
                     symbolToWord[symbolIdx] = item[1].text
                 }
                 else {
-                    symbolToWord.join('').split('\n').forEach((text) => {
-                        if (text !== '') {
-                            arr.push(text)
-                        }
-                    })
-                    symbolToWord = []
+                    if (symbolToWord.length > 0) {
+                        symbolToWord.join('').split('\n').forEach((text) => {
+                            if (text !== '') {
+                                arr.push(text)
+                            }
+                        })
+                        symbolToWord = []
+                    }
                     symbolToWord[symbolIdx] = item[1].text
                     tempPageIdx = pageIdx
                     tempBlockIdx = blockIdx
@@ -745,6 +810,14 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
                 })
             }
         })
+        if (symbolToWord.length > 0) {
+            symbolToWord.join('').split('\n').forEach((text) => {
+                if (text !== '') {
+                    arr.push(text)
+                }
+            })
+            symbolToWord = []
+        }
         return arr
     };
 };
@@ -829,7 +902,7 @@ function makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountA
 };
 
 /**
- * #### 영수증 정보(시간, TM, NO 찾기)
+ * #### 영수증 정보(시간, TM, NO) 찾기
  * 
  * 일단은 시간정보만 처리함
  */
@@ -860,3 +933,99 @@ function getReceiptInfoFromGroup(receiptInfoGroup) {
     // const receiptNo = no[0].slice(3)
     return {receiptDate/*, receiptTm, receiptNo*/}
 }
+
+/**
+ * #### Shop 정보(지점, 전화번호, 주소 ...) 찾기
+ * 
+ * 
+ */
+function getShopInfoFromGroup(shopInfo) {
+    const shopInfoSentenceArr = getSentenceArrFromGroup(shopInfo)
+    let name
+    let tel
+    let address
+    let owner
+    let businessNumber
+    shopInfoSentenceArr.forEach((ele)=>{
+        const testName = /(?<=홈플러스).*/.exec(ele)
+        const testTel = /(?<=Tel.*)\d{3}[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d{3,4}[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"]\d{4}/.exec(ele)
+        const testOwner = /(?<=[\{\}\[\]\/?.,;:|\)*~`!^\-_+<>@\#$%&\\\=\(\'\"\d]{5}\s*)[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]+/.exec(ele)
+        if (testName !== null) {
+            name = testName[0].replace(/^\s|\s$/g, '')
+        }
+        if (testTel !== null) {
+            tel = testTel[0]
+        }
+        if (testOwner !== null) {
+            owner = testOwner[0]
+            const businessNumberReg = new RegExp('[0-9-<=.,;:*~^-_+<>=]{10,20}')
+            businessNumber = businessNumberReg.exec(ele)[0]
+        }
+        else {
+            if (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]{2,3}시/.test(ele) || /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]{1,10}로/.test(ele) || /\d{1,3}번길/.test(ele)) {
+                address = ele.replace(/^\s|\s$/g, '')
+            }
+        }
+    })
+    return {name, tel, address, owner, businessNumber}
+}
+
+/**
+ * ####
+ * 
+ * - 반환하는 배열의 요소는 \n 으로 구분되거나 paragragh 가 바뀌는걸로 구분되는 하나의 sentence 이어야한다
+ * - 그릅의 최소 레벨이 word 인 경우까지만 처리가능. (symbol 은 추후 구현 예정) -> 그릅 핸들링하는 범용툴로 전환해서 다른곳에 적용할 예정
+ * - 중복코드재거해
+ */
+function getSentenceArrFromGroup(group) {
+    let arr = [];
+    let wordToParagraph = [];
+    let tempPageIdx = NaN;
+    let tempBlockIdx = NaN;
+    let tempParagraphIdx = NaN;
+    group.forEach((item) => {
+        const {pageIdx, blockIdx, paragraphIdx, wordIdx} = item[0];
+        if (wordIdx !== undefined) { // word 레벨 발견!
+            if (tempPageIdx === pageIdx && tempBlockIdx === blockIdx && tempParagraphIdx === paragraphIdx) { // 탐구 진행중인 word
+                wordToParagraph[wordIdx] = item[1].text;
+            }
+            else { // 처음시작이거나 새로운 paragraph 시작
+                if (wordToParagraph.length > 0) { // 새로운 paragraph 시작인경우
+                    wordToParagraph.join('').split('\n').forEach((text) => {
+                        if (text !== '') {
+                            arr.push(text);
+                        };
+                    });
+                    wordToParagraph = [];
+                }
+                wordToParagraph[wordIdx] = item[1].text;
+                tempPageIdx = pageIdx;
+                tempBlockIdx = blockIdx;
+                tempParagraphIdx = paragraphIdx;
+            };
+        }
+        else { // word 레벨이 아닌경우
+            if (wordToParagraph.length > 0) { // word 레벨 탐구 직후라면,
+                wordToParagraph.join('').split('\n').forEach((text) => {
+                    if (text !== '') {
+                        arr.push(text);
+                    };
+                });
+                wordToParagraph = [];
+            };
+            item[1].text.split('\n').forEach((text) => {
+                if (text !== '') {
+                    arr.push(text);
+                };
+            });
+        };
+    });
+    if (wordToParagraph.length > 0) { // 마지막에 남은거 처리
+        wordToParagraph.join('').split('\n').forEach((text) => {
+            if (text !== '') {
+                arr.push(text);
+            };
+        });
+    };
+    return arr
+};
