@@ -64,9 +64,11 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         productNameRangeX,
         unitPriceRangeX,
         textAnnotationsRangeX,
+        taxSummaryRangeX,
         itemRangeY,
         receiptInfoRangeY,
         shopInfoRangeY,
+        taxSummaryRangeY,
         quantity,
         amount
     } = findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy);
@@ -108,6 +110,17 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         )
     );
 
+    // TaxSummaryNumberGroup
+    const TaxSummaryNumberGroup = sortGroupAscByY(
+        getFulltextAnnoObjByRange(
+            fullTextAnnotationPlusStudy,
+            taxSummaryRangeX,
+            taxSummaryRangeY,
+            false,
+            {includeWords: true}
+        )
+    );
+
     const { // 수량, 금약 찾을 준비
         quantityRangeX,
         amountRangeX
@@ -139,6 +152,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
     // console.log('quantityGroup', quantityGroup);
     // console.log('amountGroup', amountGroup);
     // console.log('receiptInfoGroup', receiptInfoGroup);
+    // console.log("TaxSummaryNumberGroup", TaxSummaryNumberGroup);
 
     // 상품명, 단가, 수량, 금액 요소들의 텍스트들을 행열에 맞춰 모두 같은 길이의 배열로 만들기.
     const textArrays = getTextArraysFromGroups(
@@ -154,15 +168,9 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
     const productNameArr = deleteSpacesEachEleOfFrontAndBackInArr(
         deleteStartingTwoNumbersEachEleInArr(textArrays.productNameArray)
     );
-    const unitPriceArr = deleteAllCommaEachEleInArr(
-        deleteSpacesEachEleOfFrontAndBackInArr(textArrays.unitPriceArray)
-    );
-    const quantityArr = deleteAllCommaEachEleInArr(
-        deleteSpacesEachEleOfFrontAndBackInArr(textArrays.quantityArray)
-    );
-    const amountArr = deleteAllCommaEachEleInArr(
-        deleteSpacesEachEleOfFrontAndBackInArr(textArrays.amountArray)
-    );
+    const unitPriceArr = deleteAllNotNumberEachEleInArr(textArrays.unitPriceArray);
+    const quantityArr = deleteAllNotNumberEachEleInArr(textArrays.quantityArray);
+    const amountArr = deleteAllNotNumberEachEleInArr(textArrays.amountArray);
 
     const receiptItemArray = makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountArr);
     
@@ -178,7 +186,14 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         businessNumber
     } = getShopInfoFromGroup(shopInfoGroup);
 
-    // text
+    // TaxSummaryNumberGroup에서 TaxSummary 추출하기
+    const {
+        taxProductAmount,
+        taxAmount,
+        taxExemptionProductAmount,
+    } = getTaxSummaryFromGroup(TaxSummaryNumberGroup, taxSummaryRangeY[2]);
+
+    //
     const receipt = new Receipt(
         new Provider(multipartBody.emailAddress),
         receiptItemArray,
@@ -189,8 +204,12 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
             address,
             owner,
             businessNumber,
+            taxProductAmount,
+            taxAmount,
+            taxExemptionProductAmount
         )
     );
+
     console.log('receipt', receipt);
     return receipt;
 };
@@ -281,7 +300,7 @@ function getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, reg) {
  */
 function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy) {
 
-    // 1. 상품명 단가 수량 금액 라인 찾기
+    // 1. 상품명 단가 수량 금액 라인 찾기 // 오타로 못찾으면 오타로도 다 찾도록 추가해줘도됨. 오타가 나봐야 뭐
     const productName = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /상품명/)
     const unitPrice = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /단가/)
     const quantity = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /수량/)
@@ -334,16 +353,28 @@ function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStud
         }
     });
 
-    // 2. 아이템 y축 하안선 기준요소 찾기
+    // 총합계 (면세summary 하안, 금액 summary 상안) Pin
+    const summaryYTopPin = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /총\s*합\s*계/)
+
+    // 2. 아이템 y축 하안선 기준요소 찾기 (+부가세summary Y영역도)
     let itemYBottomPin = []
+    let taxSummaryMaxY
+    let taxSummaryStyle = 0 // (0: 과세물품, 부가세, 면세물품 / 1: 과세물품, 부가세 / 2: 면세물품) // 아마도 2번 형식도 있겠지? 일단은 0,1 만 커버하게 구현하고 2은 발견되면 추가할것임.
     const taxExemptionMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /표시 상품은 부가세 면세품목입니다/)
     if (taxExemptionMsg === null) {
-        const taxProductAmountMsg = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /과세물품/)
-        itemYBottomPin = taxProductAmountMsg
+        itemYBottomPin = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /과\s*세\s*물\s*품/) // taxSummaryYTopPin // 여기사 못찾으면 2번 스타일
     }
     else {
-        itemYBottomPin = taxExemptionMsg
+        itemYBottomPin = taxExemptionMsg // taxSummaryYTopPin
     }
+
+    // '면세물품'의 Y최대값이 taxSummary하안선 // y 걸쳐진것까지 포함 (word까지 continue포함 옵션줘서)
+    let taxSummaryYBottomPin = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /면\s*세\s*물\s*품/)
+    if (taxSummaryYBottomPin === null) {
+        taxSummaryStyle = 1
+        taxSummaryYBottomPin = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /부\s*가\s*세/)
+    }
+    taxSummaryMaxY = Math.max(...getXorYArr(taxSummaryYBottomPin[0], "y"))
 
     // 3. 1,2 번에서 찾은걸로 y축 범위 결정하기
     const productNameYs = getXorYArr(productName[productNameIndex], "y")
@@ -425,8 +456,10 @@ function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStud
     const itemRangeY = [itemMinY,itemMaxY]
     const receiptInfoRangeY = [receiptInfoMinY,receiptInfoMaxY]
     const shopInfoRangeY = [textAnnotationsMinY-1,shopInfoMaxY]
+    const taxSummaryRangeY = [itemMaxY, taxSummaryMaxY, taxSummaryStyle]
+    const taxSummaryRangeX = [Math.max(...getXorYArr(itemYBottomPin[0], "x")), textAnnotationsRangeX[1]]
 
-    return {productNameRangeX, unitPriceRangeX, textAnnotationsRangeX, itemRangeY, receiptInfoRangeY, shopInfoRangeY, quantity:quantity[quantityIndex], amount:amount[amountIndex]}
+    return {productNameRangeX, unitPriceRangeX, textAnnotationsRangeX, taxSummaryRangeX, itemRangeY, receiptInfoRangeY, shopInfoRangeY, taxSummaryRangeY, quantity:quantity[quantityIndex], amount:amount[amountIndex]}
 };
 
 /**
@@ -470,7 +503,7 @@ function getFulltextAnnoObjByRange(
     rangeX/*[overX, underX]*/,
     rangeY/*[overY, underY]*/,
     includeSymbols: boolean,
-    continueOptions?/*{includeWords:boo, word:0|1, includeSymbols:boo, symbol:0|1}*/
+    continueOptions?/*{includeWords:boo, word:0|1, includeSymbols:boo, symbol:0|1}*/ // 0: x만 완전포함조건 1: y만 완전포함조건
 ) {
     let result = [];
 
@@ -858,6 +891,20 @@ function deleteAllCommaEachEleInArr(arr) {
 };
 
 /**
+ * #### 인자로 받은 배열의 요소에 숫자가 아닌 모든것을 제거
+ * 
+ * - '-' 는 살려야함
+ */
+function deleteAllNotNumberEachEleInArr(arr) {
+    return arr.map((ele) => {
+        if (ele === undefined) {
+            return undefined
+        }
+        return ele.replace(/[^0-9-]/g, '')
+    })
+};
+
+/**
  * #### 항목객체 배열 만들기
  * 
  * Receipt Object Define Version = 0.0.1
@@ -879,7 +926,7 @@ function makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountA
             receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
         }
         else {
-        // .|*|: 으로 시작하는것 발견하면 taxExemption = true 주고 .|*|: 제거하고 space 제거하기
+        // .|*|: 으로 시작하는것 발견하면 taxExemption = true 주고 .|*|: 제거하고 space 제거하기 // : 가 포함된게 여간 찜찜하지만 일단 두고보자
             let taxExemption = false;
             if (productName.charAt(0) === "." || productName.charAt(0) === "*" || productName.charAt(0) === ":") {
                 productName = productName.replace(/^./, '').replace(/^[ ]+/g, '')
@@ -939,8 +986,8 @@ function getReceiptInfoFromGroup(receiptInfoGroup) {
  * 
  * 
  */
-function getShopInfoFromGroup(shopInfo) {
-    const shopInfoSentenceArr = getSentenceArrFromGroup(shopInfo)
+function getShopInfoFromGroup(group) {
+    const shopInfoSentenceArr = getSentenceArrFromGroup(group)
     let name
     let tel
     let address
@@ -968,6 +1015,22 @@ function getShopInfoFromGroup(shopInfo) {
         }
     })
     return {name, tel, address, owner, businessNumber}
+};
+
+function getTaxSummaryFromGroup(group, style) {
+    const taxSummarySentenceArr = deleteAllNotNumberEachEleInArr(getSentenceArrFromGroup(group))
+    let result = {
+        taxProductAmount: undefined,
+        taxAmount: undefined,
+        taxExemptionProductAmount: undefined
+    }
+    if (style === 2) {}
+    else {
+        result.taxProductAmount = taxSummarySentenceArr[0]
+        result.taxAmount = taxSummarySentenceArr[1]
+        result.taxExemptionProductAmount = taxSummarySentenceArr[2]
+    }
+    return result
 }
 
 /**
