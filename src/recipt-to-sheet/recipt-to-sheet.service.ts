@@ -16,6 +16,77 @@ export class ReciptToSheetService {
         private readonly configService: ConfigService,
     ) {}
 
+    processingReceiptImage(reciptImage: Express.Multer.File) { 
+        // 영수증인지 확인하기? (optional, potentially essential)
+
+        // Google Cloud 에 이미지 업로드 (optional, potentially necessary) (비젼돌리는것과 합쳐서 한방에 처리가능)
+
+        // 구글 비젼 API 돌리기
+        return this.annotateImage(reciptImage);
+    };
+
+    async processingAnnoRes(annoRes, multipartBody: MultipartBodyDto) {
+
+        // 생각해보니, 거꾸로였다!! 잘 만들어진 어떤 특정 영수증 솔루션에 정상 해독되면 그 특정 영수증이라고 판단하는게 더 나을수도있겠네!?
+        // 우선은 영수증 이미지를 받을때 어떤 영수증인지 정보가 오게해야하고, 그게 안오거나 불확실하는걸 생각해서 저리 순서.과정을 짜자
+
+        // 다른 폼의 영수증이라면 솔루션이 동작하지 않는다는 보장이 있을까? 그리고 이를 보장하도록 솔루션을 만드는게 효율적일지 고민 필요함
+        // 영수증이 생각보다 서로 너무 비슷해서 조금 부족한 상태로 정상 작동할 우려가 있어보이기는 함
+        // 일단은 한번 보장된다고 가정하고 플랜을 짜보면,
+        /**
+         * 1. 제공된 마트 정보를 가지고 그에 맞는 솔루션을 돌려봄
+         * 
+         * 2. 제공된 정보가 없으면, 영수증에서 'homeplus, 홈플러스, 이마트, emart, costco 등등' 키워드를 찾아봄
+         *    찾아진 그 키워드에 해당하는 솔루션을 돌려봄
+         * 
+         * 3. 1,2 에서 적용한 솔루션이 잘 돌아가면 된거고 문제 있으면 다른 솔루션을 돌려봐야함
+         * 
+         * 4. 정상 동작하는 솔루션이 없다면
+         *  - 솔루션에 문제가 있거나 (피드백 얻기)
+         *  - 이미지에 문제가 있거나 (지원하지 않는 마트, 읽기에 부적합한 이미지)
+         */
+
+        // ----------------------------------------------
+        
+        // 데이터 추출하고 영수증객체 만들기
+        /*
+        1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
+        2. 홈플러스 솔루션으로 text 추출하여 영수증객체 만들기
+        */
+        const receiptObject = getReceiptObject(
+            googleVisionAnnoInspectorPipe(annoRes),
+            multipartBody
+        );
+
+        // Sheet 만들기 (csv | xlsx) -> attachments 만들기
+        const attachments = this.createAttachments(receiptObject, multipartBody.sheetFormat);
+        
+        // 이메일 보내기
+        const email = await this.sendEmail(attachments, receiptObject);
+        
+        /* 몽고디비에 저장하기 (optional, potentially essential)
+            항목 객체들이 담긴 배열과 그밖의 필요 데이터들을 도큐먼트로 저장하면된다.
+            email 전송 성공여부도 저장된다.
+        */
+
+        return {email,receiptObject};
+    };
+
+    async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
+        
+        const {receiptStyle, labsReceiptNumber} = multipartBody;
+        if (!receiptStyle || !labsReceiptNumber) {
+            throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
+        }
+        const annotateResult = await this.annotateImage(reciptImage);
+
+        let data = "export = " + JSON.stringify(annotateResult, null, 4);
+        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
+
+        data = "export = " + JSON.stringify(multipartBody, null, 4);
+        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
+    };
+
     async annotateImage(image: Express.Multer.File) {
         const client = new ImageAnnotatorClient({credentials});
         const request = {
@@ -125,55 +196,5 @@ export class ReciptToSheetService {
                 result = {"Email sent ERROR": error}
             })
         return result
-    };
-
-    async processingTransferredReceipt(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
-
-        // 영수증인지 확인하기 (optional, potentially essential)
-        // 생각해보니, 거꾸로였다!! 잘 만들어진 어떤 특정 영수증 솔루션에 정상 해독되면 그 특정 영수증이라고 판단하는게 더 나을수도있겠네!?
-        // 우선은 영수증 이미지를 받을때 어떤 영수증인지 정보가 오게해야하고, 그게 안오거나 불확실하는걸 생각해서 저리 순서.과정을 짜자
-
-        // AWS | Google Cloud 에 이미지 업로드 (optional, potentially necessary) (구글 클라우드 사용하면 비젼돌리는것과 합쳐서 한방에 처리가능하지 않을까?)
-
-        // 구글 비젼 API 돌리기
-        const annotateResult = await this.annotateImage(reciptImage);
-
-        // 데이터 추출하고 영수증객체 만들기
-            /*
-            1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
-            2. 홈플러스 솔루션으로 text 추출하여 영수증갹체 만들기
-            */
-        const receiptObject = getReceiptObject(
-            googleVisionAnnoInspectorPipe(annotateResult),
-            multipartBody
-        );
-
-        // Sheet 만들기 (csv | xlsx) -> attachments 만들기
-        const attachments = this.createAttachments(receiptObject, multipartBody.sheetFormat);
-        
-        // 이메일 보내기
-        const email = await this.sendEmail(attachments, receiptObject);
-        
-        /* 몽고디비에 저장하기 (optional, potentially essential)
-            항목 객체들이 담긴 배열과 그밖의 필요 데이터들을 도큐먼트로 저장하면된다.
-            email 전송 성공여부도 저장된다.
-        */
-
-        return {email,receiptObject};
-    };
-
-    async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
-        
-        const {receiptStyle, labsReceiptNumber} = multipartBody;
-        if (!receiptStyle || !labsReceiptNumber) {
-            throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
-        }
-        const annotateResult = await this.annotateImage(reciptImage);
-
-        let data = "export = " + JSON.stringify(annotateResult, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
-
-        data = "export = " + JSON.stringify(multipartBody, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
     };
 };

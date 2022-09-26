@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Post, Redirect, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { ReciptToSheetService } from './recipt-to-sheet.service';
@@ -6,16 +6,19 @@ import { ReciptToSheetService } from './recipt-to-sheet.service';
 @Controller('recipt-to-sheet')
 export class ReciptToSheetController {
     constructor(private readonly reciptToSheetService: ReciptToSheetService) {}
-
+    
     @Post()
     @UseInterceptors(FileInterceptor('reciptImage'/*, {options} */))
     async processingTransferredReceipt(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) { // 지금은 단일 이미지만 처리한다. 추후에는 여러 영수증이미지를 받아서 처리할 수 있도록 하자.
-        return this.reciptToSheetService.processingTransferredReceipt(reciptImage, multipartBody);
+        // FE
+        const annotateRes = await this.reciptToSheetService.processingReceiptImage(reciptImage);
+        // BE
+        return this.reciptToSheetService.processingAnnoRes(annotateRes, multipartBody);
     };
 
     @Post('lab')
     @UseInterceptors(FileInterceptor('reciptImage'/*, {options} */))
-    async sendGoogleVisionAnnotateResultToLabs(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) {
+    sendGoogleVisionAnnotateResultToLabs(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) {
         return this.reciptToSheetService.sendGoogleVisionAnnotateResultToLabs(reciptImage, multipartBody);
-    }
-}
+    };
+};

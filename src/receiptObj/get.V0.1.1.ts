@@ -210,7 +210,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         )
     );
 
-    console.log('receipt', receipt);
+    // console.log('receipt', receipt);
     return receipt;
 };
 
