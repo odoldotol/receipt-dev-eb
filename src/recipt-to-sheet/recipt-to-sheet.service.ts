@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
+import {Storage} from '@google-cloud/storage';
 import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
@@ -8,24 +9,39 @@ import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.
 import getReceiptObject from '../receiptObj/get.V0.1.1';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { writeFile } from 'fs';
+import { v4 as uuidv4 } from 'uuid'
 
 @Injectable()
 export class ReciptToSheetService {
 
+    private imageAnnotatorClient: ImageAnnotatorClient
+    private sgMail
+    private googleCloudStorage: Storage
+    private bucketName: string
+
     constructor(
         private readonly configService: ConfigService,
-    ) {}
+    ) {
+        this.imageAnnotatorClient = new ImageAnnotatorClient({credentials});
+        this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
+        this.googleCloudStorage = new Storage({credentials});
+        this.bucketName = "receipt-image-dev"
+    }
 
-    processingReceiptImage(reciptImage: Express.Multer.File) { 
+    async processingReceiptImage(reciptImage: Express.Multer.File) { 
         // 영수증인지 확인하기? (optional, potentially essential)
 
-        // Google Cloud 에 이미지 업로드 (optional, potentially necessary) (비젼돌리는것과 합쳐서 한방에 처리가능)
+        // Google Cloud 에 이미지 업로드
+        const filename = await this.uploadImageToGCS(reciptImage)
+
 
         // 구글 비젼 API 돌리기
-        return this.annotateImage(reciptImage);
+        const imageUri = `gs://${this.bucketName}/${filename}`
+        const annoRes = await this.annotateGscImage(imageUri)
+        return { annoRes, imageUri };
     };
 
-    async processingAnnoRes(annoRes, multipartBody: MultipartBodyDto) {
+    async processingAnnoRes(annoRes, imageUri: string, multipartBody: MultipartBodyDto) {
 
         // 생각해보니, 거꾸로였다!! 잘 만들어진 어떤 특정 영수증 솔루션에 정상 해독되면 그 특정 영수증이라고 판단하는게 더 나을수도있겠네!?
         // 우선은 영수증 이미지를 받을때 어떤 영수증인지 정보가 오게해야하고, 그게 안오거나 불확실하는걸 생각해서 저리 순서.과정을 짜자
@@ -87,8 +103,15 @@ export class ReciptToSheetService {
         writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
     };
 
+    async uploadImageToGCS(image: Express.Multer.File) {
+        const destFileName = uuidv4() + "." + /(?<=image\/)[a-z]*/.exec(image.mimetype)[0];
+        const contents = image.buffer
+        await this.googleCloudStorage.bucket(this.bucketName).file(destFileName).save(contents)
+
+        return destFileName;
+    }
+
     async annotateImage(image: Express.Multer.File) {
-        const client = new ImageAnnotatorClient({credentials});
         const request = {
             "image": {
                 "content": image.buffer.toString('base64')
@@ -101,7 +124,33 @@ export class ReciptToSheetService {
             ]
         };
         let result
-        await client.annotateImage(request)
+        await this.imageAnnotatorClient.annotateImage(request)
+            .then(results => {
+                // console.log(results);
+                result = results
+            })
+            .catch(err => {
+                console.error('annotateImage ERROR:', err);
+                result = err
+            });
+        return result
+    };
+    async annotateGscImage(imageUri: string) {
+        const request = {
+            "image": {
+                "source": {
+                    imageUri
+                }
+            },
+            "features": [
+                {"type": "TEXT_DETECTION"},
+                {"type": "DOCUMENT_TEXT_DETECTION"},
+                {"type": "CROP_HINTS"},
+                // {"type": "LOGO_DETECTION"},
+            ]
+        };
+        let result
+        await this.imageAnnotatorClient.annotateImage(request)
             .then(results => {
                 // console.log(results);
                 result = results
@@ -175,7 +224,6 @@ export class ReciptToSheetService {
 
     async sendEmail(attachments, receiptObject) {
         const date = receiptObject.readFromReceipt.date
-        sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
         const msg = {
             to: receiptObject.provider.emailAddress, // recipient // 나중엔 output 에서
             from: 'service.lygo@gmail.com', // verified sender
@@ -185,7 +233,7 @@ export class ReciptToSheetService {
             attachments
         }
         let result
-        await sgMail
+        await this.sgMail
             .send(msg)
             .then((res) => {
                 // console.log('Email sent')
