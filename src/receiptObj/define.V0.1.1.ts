@@ -5,9 +5,9 @@ class Receipt {
         public provider: Provider,
         public itemArray: ReceiptItem[],
         public readFromReceipt: ReceiptReadFromReceipt,
+        public imageAddress: string,
         public providerInput?,
         public outputRequests?: OutputRequest[],
-        public imageAddress?: string,
     ) {
         /** 체크, 보정
          * 

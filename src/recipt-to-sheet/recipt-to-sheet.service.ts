@@ -71,7 +71,8 @@ export class ReciptToSheetService {
         */
         const receiptObject = getReceiptObject(
             googleVisionAnnoInspectorPipe(annoRes),
-            multipartBody
+            multipartBody,
+            imageUri
         );
 
         // Sheet 만들기 (csv | xlsx) -> attachments 만들기

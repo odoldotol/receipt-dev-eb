@@ -54,7 +54,7 @@ import {ReceiptItem, Discount, ItemReadFromReceipt, Receipt, Provider, ReceiptRe
 /**
  * 
  */
-export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}, multipartBody: MultipartBodyDto) {
+export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}, multipartBody: MultipartBodyDto, imageUri?: string): Receipt {
     
     const {textAnnotations, fullTextAnnotationPlusStudy} = annotateResult;
 
@@ -207,7 +207,8 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
             taxProductAmount,
             taxAmount,
             taxExemptionProductAmount
-        )
+        ),
+        imageUri? imageUri : null
     );
 
     // console.log('receipt', receipt);
