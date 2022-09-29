@@ -50,13 +50,21 @@
  */
 
 import { MultipartBodyDto } from 'src/recipt-to-sheet/dto/multipartBody.dto';
-import {ReceiptItem, Discount, ItemReadFromReceipt, Receipt, Provider, ReceiptReadFromReceipt} from './define.V0.1.1';
+import { Receipt } from './define.V0.1.1';
 /**
  * 
  */
 export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}, multipartBody: MultipartBodyDto, imageUri?: string): Receipt {
     
     const {textAnnotations, fullTextAnnotationPlusStudy} = annotateResult;
+    const {emailAddress, receiptStyle} = multipartBody
+
+    // 영수증 객체 생성!
+    const receipt = new Receipt(
+        emailAddress,
+        imageUri? imageUri : null,
+        receiptStyle? receiptStyle : null
+    )
 
     // 영수증의 기울기나 상태에 따라 범위를 조절해야할 수도 있음. 일단은 고정솔루션으로 최대한 커버해보기
 
@@ -121,7 +129,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         )
     );
 
-    const { // 수량, 금약 찾을 준비
+    const { // 수량, 금액 찾을 준비
         quantityRangeX,
         amountRangeX
     } = findItemRangeQuantityAmount(textAnnotationsRangeX, quantity, amount, unitPriceGroup);
@@ -172,44 +180,17 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
     const quantityArr = deleteAllNotNumberEachEleInArr(textArrays.quantityArray);
     const amountArr = deleteAllNotNumberEachEleInArr(textArrays.amountArray);
 
-    const receiptItemArray = makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountArr);
-    
-    // ReceiptInfoGroup에서 ReceiptInfo 추출하기
-    const receiptInfo = getReceiptInfoFromGroup(receiptInfoGroup);
-
-    // ShopInfoGroup에서 ShopInfo 추출하기
-    const {
-        name,
-        tel,
-        address,
-        owner,
-        businessNumber
-    } = getShopInfoFromGroup(shopInfoGroup);
-
-    // TaxSummaryNumberGroup에서 TaxSummary 추출하기
-    const {
-        taxProductAmount,
-        taxAmount,
-        taxExemptionProductAmount,
-    } = getTaxSummaryFromGroup(TaxSummaryNumberGroup, taxSummaryRangeY[2]);
-
     //
-    const receipt = new Receipt(
-        new Provider(multipartBody.emailAddress),
-        receiptItemArray,
-        new ReceiptReadFromReceipt(
-            receiptInfo.receiptDate,
-            name,
-            tel,
-            address,
-            owner,
-            businessNumber,
-            taxProductAmount,
-            taxAmount,
-            taxExemptionProductAmount
-        ),
-        imageUri? imageUri : null
-    );
+    receipt.readReceiptItems(productNameArr, unitPriceArr, quantityArr, amountArr)
+    
+    // ReceiptInfoGroup에서 ReceiptInfo 추출하고 영수증 객체에 입력
+    receipt.readReceiptInfo(getReceiptInfoFromGroup(receiptInfoGroup));
+
+    // ShopInfoGroup에서 ShopInfo 추출하고 영수증 갹체에 입력
+    receipt.readShopInfo(getShopInfoFromGroup(shopInfoGroup));
+
+    // TaxSummaryNumberGroup에서 TaxSummary 추출하고 영수증 객체에 입력
+    receipt.readTaxSummary(getTaxSummaryFromGroup(TaxSummaryNumberGroup, taxSummaryRangeY[2]));
 
     // console.log('receipt', receipt);
     return receipt;
@@ -903,50 +884,6 @@ function deleteAllNotNumberEachEleInArr(arr) {
         }
         return ele.replace(/[^0-9-]/g, '')
     })
-};
-
-/**
- * #### 항목객체 배열 만들기
- * 
- * Receipt Object Define Version = 0.0.1
- */
-function makeReceiptItemArray(productNameArr, unitPriceArr, quantityArr, amountArr):ReceiptItem[] {
-    const receiptItemArray = [];
-    productNameArr.forEach((productName, idx) => {
-        // Discount 상품명 발견하면 Discount 객체 만들어서 바로 전 아이템에 넣어주기
-        if (productName.includes("행사할인")) {
-            const discount = new Discount(productName, amountArr[idx])
-            receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
-        }
-        else if (productName.includes("쿠폰할인")) {
-            const discount = new Discount(productName, amountArr[idx], unitPriceArr[idx])
-            receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
-        }
-        else if (productName.includes("카드할인")) {
-            const discount = new Discount(productName, amountArr[idx])
-            receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
-        }
-        else {
-        // .|*|: 으로 시작하는것 발견하면 taxExemption = true 주고 .|*|: 제거하고 space 제거하기 // : 가 포함된게 여간 찜찜하지만 일단 두고보자
-            let taxExemption = false;
-            if (productName.charAt(0) === "." || productName.charAt(0) === "*" || productName.charAt(0) === ":") {
-                productName = productName.replace(/^./, '').replace(/^[ ]+/g, '')
-                taxExemption = true;
-            }
-            receiptItemArray.push(
-                new ReceiptItem(
-                    new ItemReadFromReceipt(
-                        productName,
-                        unitPriceArr[idx],
-                        quantityArr[idx],
-                        amountArr[idx],
-                        taxExemption
-                    )
-                )
-            );
-        };
-    });
-    return receiptItemArray
 };
 
 /**

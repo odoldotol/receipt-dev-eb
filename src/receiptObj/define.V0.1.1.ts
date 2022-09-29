@@ -1,14 +1,95 @@
 // 영수증 객체
 class Receipt {
 
+    public provider: Provider
+    public itemArray: ReceiptItem[]
+    public readFromReceipt: ReceiptReadFromReceipt
+    public providerInput: ProviderInput
+    public outputRequests?: OutputRequest[]
+
     constructor(
-        public provider: Provider,
-        public itemArray: ReceiptItem[],
-        public readFromReceipt: ReceiptReadFromReceipt,
+        emailAddress: string,
         public imageAddress: string,
-        public providerInput?,
-        public outputRequests?: OutputRequest[],
+        receiptStyle: string,
     ) {
+        this.provider = new Provider(emailAddress)
+        this.providerInput = new ProviderInput(receiptStyle)
+        this.readFromReceipt = new ReceiptReadFromReceipt()
+    };
+
+    /**
+     * #### itemArray 완성
+     * 4개의 배열을 인자로 받음 (당연히 길이가 같아야함)
+     */
+    readReceiptItems(productNameArr: Array<string|undefined>, unitPriceArr: Array<number|undefined>, quantityArr: Array<number|undefined>, amountArr: Array<number|undefined>) {
+        const receiptItemArray = [];
+        productNameArr.forEach((productName, idx) => {
+            // Discount 상품명 발견하면 Discount 객체 만들어서 바로 전 아이템에 넣어주기
+            if (productName.includes("행사할인")) {
+                const discount = new Discount(productName, amountArr[idx])
+                receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
+            }
+            else if (productName.includes("쿠폰할인")) {
+                const discount = new Discount(productName, amountArr[idx], unitPriceArr[idx])
+                receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
+            }
+            else if (productName.includes("카드할인")) {
+                const discount = new Discount(productName, amountArr[idx])
+                receiptItemArray[receiptItemArray.length-1].addDiscount(discount)
+            }
+            else {
+            // .|*|: 으로 시작하는것 발견하면 taxExemption = true 주고 .|*|: 제거하고 space 제거하기 // : 가 포함된게 여간 찜찜하지만 일단 두고보자
+                let taxExemption = false;
+                if (productName.charAt(0) === "." || productName.charAt(0) === "*" || productName.charAt(0) === ":") {
+                    productName = productName.replace(/^./, '').replace(/^[ ]+/g, '')
+                    taxExemption = true;
+                }
+                receiptItemArray.push(
+                    new ReceiptItem(
+                        new ItemReadFromReceipt(
+                            productName,
+                            unitPriceArr[idx],
+                            quantityArr[idx],
+                            amountArr[idx],
+                            taxExemption
+                        )
+                    )
+                );
+            };
+        });
+        this.itemArray = receiptItemArray;
+    };
+
+    /**
+     * 영수증 정보를 readFromReceipt 에 넣기
+     */
+    readReceiptInfo(receiptInfo) {
+        this.readFromReceipt.setReceiptInfo(receiptInfo)
+    }
+
+    /**
+     * ShopInfo 를 readFromReceipt 에 넣기
+     */
+    readShopInfo(shopInfo) {
+        this.readFromReceipt.setShopInfo(shopInfo)
+    }
+
+    /**
+     * taxSummary 를 readFromReceipt 에 넣기
+     */
+    readTaxSummary(taxSummary) {
+        this.readFromReceipt.setTaxSummary(taxSummary)
+    }
+
+    /**
+     * 
+     */
+    addOutputRequest() {};
+
+    /**
+     * 
+     */
+    complete() {
         /** 체크, 보정
          * 
          * - 각 item 안에 있는 check 들
@@ -23,10 +104,10 @@ class Receipt {
 
         // 체크, 보정 다 끝나면
         this.itemArray.forEach(item => {
-            item.conplete()
+            item.complete()
         })
         // 결제섹션에서 결제할인 된것 각 item 별 구매금액에서 퍼센드로 계산해서 실 구매가 계산해주기
-    }
+    };
 };
 
 // -------------------------------------------------------------------------
@@ -101,7 +182,7 @@ class Receipt {
          * - 궁극적으로는 readFromReceipt 에서 사용할수있는 모든것들을 밖으로 빼야한다.
          * - 지금은 readFromReceipt 를 사용중.
          */
-        conplete() {
+        complete() {
             // 완성이 안됬으면 실행할 수 않는 어떤 조건을 주고싶다.
             this.sumDiscountAmount()
             this.calPurchaseAmount()
@@ -147,31 +228,57 @@ class Receipt {
     // 영수증에서 읽은 영구증의 rare data
     class ReceiptReadFromReceipt {
 
+        public date: Date
+        public name: string
+        public tel: string
+        public address: string
+        public owner: string
+        public businessNumber: string
         public taxProductAmount: number
         public taxAmount: number
         public taxExemptionProductAmount: number
+        public tm?: string
+        public no?: string
+        //총가격
+        //할인
+        //결제
 
-        constructor(
-            public date: Date,
-            public name: string,
-            public tel: string,
-            public address: string,
-            public owner: string,
-            public businessNumber: string,
-            taxProductAmount: number,
-            taxAmount: number,
-            taxExemptionProductAmount: number,
-            public tm?: string,
-            public no?: string,
-            //총가격
-            //할인
-            //결제
-        ) {
+        constructor() {}
+
+        /**
+         * 
+         */
+        setReceiptInfo({receiptDate}) {
+            this.date = receiptDate
+        }
+
+        /**
+         * 
+         */
+        setShopInfo({name, tel, address, owner, businessNumber}) {
+            this.name = name
+            this.tel = tel
+            this.address = address
+            this.owner = owner
+            this.businessNumber = businessNumber
+        }
+
+        /**
+         * 
+         */
+        setTaxSummary({taxProductAmount, taxAmount, taxExemptionProductAmount}) {
             this.taxProductAmount = Number(taxProductAmount)
             this.taxAmount = Number(taxAmount)
             this.taxExemptionProductAmount = Number(taxExemptionProductAmount)
         }
     };
+
+    class ProviderInput {
+
+        constructor(
+            public receiptStyle: string|null,
+        ) {}
+    }
 
     class OutputRequest {
 
@@ -180,4 +287,4 @@ class Receipt {
         ) {}
     };
 
-export {ReceiptItem, Discount, ItemReadFromReceipt, Receipt, Provider, ReceiptReadFromReceipt}
+export {Receipt}
