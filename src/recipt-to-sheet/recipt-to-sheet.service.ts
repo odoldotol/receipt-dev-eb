@@ -10,6 +10,7 @@ import getReceiptObject from '../receiptObj/get.V0.1.1';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { writeFile } from 'fs';
 import { v4 as uuidv4 } from 'uuid'
+import { Receipt } from '../receiptObj/define.V0.1.1'
 
 @Injectable()
 export class ReciptToSheetService {
@@ -41,7 +42,7 @@ export class ReciptToSheetService {
         return { annoRes, imageUri };
     };
 
-    async processingAnnoRes(annoRes, imageUri: string, multipartBody: MultipartBodyDto) {
+    async processingAnnoRes(annoRes, imageUri: string, multipartBody: MultipartBodyDto, requestDate: Date) {
 
         // 생각해보니, 거꾸로였다!! 잘 만들어진 어떤 특정 영수증 솔루션에 정상 해독되면 그 특정 영수증이라고 판단하는게 더 나을수도있겠네!?
         // 우선은 영수증 이미지를 받을때 어떤 영수증인지 정보가 오게해야하고, 그게 안오거나 불확실하는걸 생각해서 저리 순서.과정을 짜자
@@ -49,7 +50,7 @@ export class ReciptToSheetService {
         // 다른 폼의 영수증이라면 솔루션이 동작하지 않는다는 보장이 있을까? 그리고 이를 보장하도록 솔루션을 만드는게 효율적일지 고민 필요함
         // 영수증이 생각보다 서로 너무 비슷해서 조금 부족한 상태로 정상 작동할 우려가 있어보이기는 함
         // 일단은 한번 보장된다고 가정하고 플랜을 짜보면,
-        /**
+        /*
          * 1. 제공된 마트 정보를 가지고 그에 맞는 솔루션을 돌려봄
          * 
          * 2. 제공된 정보가 없으면, 영수증에서 'homeplus, 홈플러스, 이마트, emart, costco 등등' 키워드를 찾아봄
@@ -75,19 +76,29 @@ export class ReciptToSheetService {
             imageUri
         );
 
-        // Sheet 만들기 (csv | xlsx) -> attachments 만들기
-        const attachments = this.createAttachments(receiptObject, multipartBody.sheetFormat);
-        
-        // 이메일 보내기
-        const email = await this.sendEmail(attachments, receiptObject);
-        
-        /* 몽고디비에 저장하기 (optional, potentially essential)
-            항목 객체들이 담긴 배열과 그밖의 필요 데이터들을 도큐먼트로 저장하면된다.
-            email 전송 성공여부도 저장된다.
+        // 출력 요청 만들어서 영수증 객체에 넣기
+        const requestType = 'provided'
+        receiptObject.addOutputRequest(requestDate, multipartBody.sheetFormat, multipartBody.emailAddress, requestType)
+
+        // 출력요청 처리하기
+        await this.executeOutputRequest(receiptObject)
+
+        /* 몽고디비에 저장하기
         */
 
-        return {email,receiptObject};
+        return {receiptObject};
     };
+
+    async executeOutputRequest(receipt: Receipt) {
+        // Sheet 만들기 (csv | xlsx) -> attachments 만들기
+        const attachments = this.createAttachments(receipt);
+        
+        // 이메일 보내기
+        const email = await this.sendEmail(attachments, receipt);
+
+        // 요청 처리 결과 저장
+        receipt.completeOutputRequest(email);
+    }
 
     async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
         
@@ -163,7 +174,8 @@ export class ReciptToSheetService {
         return result
     };
 
-    createAttachments(receiptObject, sheetFormat) {
+    createAttachments(receiptObject: Receipt) {
+        const sheetFormat = receiptObject.outputRequests[receiptObject.outputRequests.length-1].sheetFormat;
         let attachment
         const date = receiptObject.readFromReceipt.date
         if (sheetFormat === 'csv') {
@@ -223,10 +235,10 @@ export class ReciptToSheetService {
         }]
     };
 
-    async sendEmail(attachments, receiptObject) {
+    async sendEmail(attachments, receiptObject: Receipt) {
         const date = receiptObject.readFromReceipt.date
         const msg = {
-            to: receiptObject.provider.emailAddress, // recipient // 나중엔 output 에서
+            to: receiptObject.outputRequests[receiptObject.outputRequests.length-1].emailAddress, // recipient
             from: 'service.lygo@gmail.com', // verified sender
             subject: `${date.getFullYear()}년 ${date.getMonth()+1}월 ${date.getDate()}일 결제하신 홈플러스 영수증의 엑셀파일입니다.`, // 마트, 시트포멧
             // text: 'www.recipto.com',

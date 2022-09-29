@@ -5,7 +5,7 @@ class Receipt {
     public itemArray: ReceiptItem[]
     public readFromReceipt: ReceiptReadFromReceipt
     public providerInput: ProviderInput
-    public outputRequests?: OutputRequest[]
+    public outputRequests: OutputRequest[]
 
     constructor(
         emailAddress: string,
@@ -15,6 +15,7 @@ class Receipt {
         this.provider = new Provider(emailAddress)
         this.providerInput = new ProviderInput(receiptStyle)
         this.readFromReceipt = new ReceiptReadFromReceipt()
+        this.outputRequests = []
     };
 
     /**
@@ -84,7 +85,16 @@ class Receipt {
     /**
      * 
      */
-    addOutputRequest() {};
+    addOutputRequest(requestDate, sheetFormat, emailAddress, requestType) {
+        this.outputRequests.push(new OutputRequest(requestDate, sheetFormat, emailAddress, requestType))
+    };
+
+    /**
+     * 
+     */
+    completeOutputRequest(result) { // 임시
+        this.outputRequests[this.outputRequests.length-1].setOutputResult(result)
+    }
 
     /**
      * 
@@ -282,9 +292,21 @@ class Receipt {
 
     class OutputRequest {
 
+        public result: any // 임시 형태
+
         constructor(
-            // 언제 어떤방식으로 어디로, 실행.성공여부?
+            public requestDate: Date,
+            public sheetFormat: string,
+            public emailAddress: string,
+            public requestType: 'provided'|'general',
         ) {}
+
+        /**
+         * 
+         */
+        setOutputResult(result: any) { // 임시
+            this.result = result
+        }
     };
 
 export {Receipt}
