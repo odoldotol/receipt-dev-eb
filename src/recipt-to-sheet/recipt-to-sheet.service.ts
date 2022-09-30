@@ -96,11 +96,9 @@ export class ReciptToSheetService {
         const requestType = 'provided'
         receipt.addOutputRequest(requestDate, multipartBody.sheetFormat, multipartBody.emailAddress, requestType)
 
-        if (permits.items) {
-            // 출력요청 처리하기
-            await this.executeOutputRequest(receipt)
-        };
-
+        // 출력요청 처리하기
+        await this.executeOutputRequest(receipt, permits)
+        
         // receipt(+annoResId) 디비에 저장하기
         const saveResult_Receipt = await this.saveReceipt(receipt, saveResult_AnnoRes)
 
@@ -153,13 +151,19 @@ export class ReciptToSheetService {
     /**
      * 
      */
-     async executeOutputRequest(receipt: Receipt) {
-        // Sheet 만들기 (csv | xlsx) -> attachments 만들기
-        const attachments = this.createAttachments(receipt);
-        
-        // 이메일 보내기
-        const email = await this.sendEmail(attachments, receipt);
+     async executeOutputRequest(receipt: Receipt, permits) {
 
+        let email
+        if (permits.items) {
+            // Sheet 만들기 (csv | xlsx) -> attachments 만들기
+            const attachments = this.createAttachments(receipt);
+            
+            // 이메일 보내기
+            email = await this.sendEmail(attachments, receipt);
+        }
+        else {
+            email = "Haven't sent an email: Permit of items is false"
+        }
         // 요청 처리 결과 저장
         receipt.completeOutputRequest(email);
     };

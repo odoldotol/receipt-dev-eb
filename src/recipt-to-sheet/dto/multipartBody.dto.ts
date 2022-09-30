@@ -16,4 +16,7 @@ export class MultipartBodyDto {
     @IsOptional()
     @IsString()
     readonly labsReceiptNumber?: string;
+
+    @IsOptional()
+    readonly password: string; // 임시
 };
