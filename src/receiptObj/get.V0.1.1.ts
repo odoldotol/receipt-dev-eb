@@ -47,6 +47,7 @@
  * taxExemption 은 기대를 하지 말자.
  * 홈플러스의 부가세 면세품목을 감지하기위해서는 * 를 똑바로 감지해야하는데 이에대한 정확도에 문제가 있음.
  * 우선 * 이나 . 로 찾는건 처리를 하지만 그외 이상하게 찾거나 못찾는것은 그대로 방치중임
+ * taxSummary 로 부터 어느정도 보정,정확도향상 기대됨
  */
 
 import { MultipartBodyDto } from 'src/recipt-to-sheet/dto/multipartBody.dto';
@@ -54,22 +55,29 @@ import { Receipt } from './define.V0.1.1';
 /**
  * 
  */
-export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}, multipartBody: MultipartBodyDto, imageUri?: string): Receipt {
+export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}, multipartBody: MultipartBodyDto, imageUri?: string): {receipt: Receipt, failures: any[], permits: {items, receiptInfo, shopInfo, taxSummary} } {
     
     const {textAnnotations, fullTextAnnotationPlusStudy} = annotateResult;
     const {emailAddress, receiptStyle} = multipartBody
+
+    //
+    const failures = []
+    const permits = {
+        items: true,
+        receiptInfo: true,
+        shopInfo: true,
+        taxSummary: true
+    }
 
     // 영수증 객체 생성!
     const receipt = new Receipt(
         emailAddress,
         imageUri? imageUri : null,
         receiptStyle? receiptStyle : null
-    )
+    );
 
     // 영수증의 기울기나 상태에 따라 범위를 조절해야할 수도 있음. 일단은 고정솔루션으로 최대한 커버해보기
-
-    const { // 먼저 단가까지만 찾을준비
-        productNameRangeX,
+    let productNameRangeX,
         unitPriceRangeX,
         textAnnotationsRangeX,
         taxSummaryRangeX,
@@ -79,126 +87,202 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         taxSummaryRangeY,
         quantity,
         amount
-    } = findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy);
-
-    // 상품명, 단가 요소들을 모아놓은 배열을 만들고 y축에대해 정렬.
-    const productNameGroup = sortGroupAscByY(
-        getFulltextAnnoObjByRange(
-            fullTextAnnotationPlusStudy,
+    try {
+        ({ // productNameGroup, unitPriceGroup 까지 찾을 준비 + ReceiptInfoGroup, ShopInfoGroup, TaxSummaryNumberGroup 까지 찾을 준비
             productNameRangeX,
-            itemRangeY,
-            false
-        )
-    );
-    const unitPriceGroup = sortGroupAscByY(
-        getFulltextAnnoObjByRange(
-            fullTextAnnotationPlusStudy,
             unitPriceRangeX,
+            textAnnotationsRangeX,
+            taxSummaryRangeX,
             itemRangeY,
-            false,
-            {includeWords: true, word: 1}
-        )
-    );
+            receiptInfoRangeY,
+            shopInfoRangeY,
+            taxSummaryRangeY,
+            quantity,
+            amount
+            // 내부에서 독립적으로 결과물을 뱉도록 나눌 필요가 있음. 일단은 전부 실패거나 성공임.
+        } = findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStudy));
+
+    } catch (error) {
+        failures.push(error.stack)
+        permits.items = false
+        permits.receiptInfo = false
+        permits.shopInfo = false
+        permits.taxSummary = false
+    };
+
+    let productNameGroup,
+        unitPriceGroup
+    if (permits.items) {
+        // 상품명, 단가 요소들을 모아놓은 배열을 만들고 y축에대해 정렬.
+        try {
+            productNameGroup = sortGroupAscByY(
+                getFulltextAnnoObjByRange(
+                    fullTextAnnotationPlusStudy,
+                    productNameRangeX,
+                    itemRangeY,
+                    false
+                )
+            );
+            unitPriceGroup = sortGroupAscByY(
+                getFulltextAnnoObjByRange(
+                    fullTextAnnotationPlusStudy,
+                    unitPriceRangeX,
+                    itemRangeY,
+                    false,
+                    {includeWords: true, word: 1}
+                )
+            );
+        } catch (error) {
+            failures.push(error.stack)
+            permits.items = false
+        };
+    };
 
     // ReceiptInfoGroup
-    const receiptInfoGroup = getFulltextAnnoObjByRange(
-        fullTextAnnotationPlusStudy,
-        textAnnotationsRangeX,
-        receiptInfoRangeY,
-        false
-    );
-
-    // ShopInfoGroup
-    const shopInfoGroup = sortGroupAscByY(
-        getFulltextAnnoObjByRange(
+    let receiptInfoGroup
+    try {
+        receiptInfoGroup = getFulltextAnnoObjByRange(
             fullTextAnnotationPlusStudy,
             textAnnotationsRangeX,
-            shopInfoRangeY,
+            receiptInfoRangeY,
             false
-        )
-    );
+        );
+    } catch (error) {
+        failures.push(error.stack)
+        permits.receiptInfo = false
+    };
+
+    // ShopInfoGroup
+    let shopInfoGroup
+    try {
+        shopInfoGroup = sortGroupAscByY(
+            getFulltextAnnoObjByRange(
+                fullTextAnnotationPlusStudy,
+                textAnnotationsRangeX,
+                shopInfoRangeY,
+                false
+            )
+        );
+    } catch (error) {
+        failures.push(error.stack)
+        permits.shopInfo = false
+    };
 
     // TaxSummaryNumberGroup
-    const TaxSummaryNumberGroup = sortGroupAscByY(
-        getFulltextAnnoObjByRange(
-            fullTextAnnotationPlusStudy,
-            taxSummaryRangeX,
-            taxSummaryRangeY,
-            false,
-            {includeWords: true}
-        )
-    );
+    let taxSummaryNumberGroup
+    try {
+        taxSummaryNumberGroup = sortGroupAscByY(
+            getFulltextAnnoObjByRange(
+                fullTextAnnotationPlusStudy,
+                taxSummaryRangeX,
+                taxSummaryRangeY,
+                false,
+                {includeWords: true}
+            )
+        );
+    } catch (error) {
+        failures.push(error.stack)
+        permits.taxSummary = false
+    };
 
-    const { // 수량, 금액 찾을 준비
-        quantityRangeX,
-        amountRangeX
-    } = findItemRangeQuantityAmount(textAnnotationsRangeX, quantity, amount, unitPriceGroup);
+    if (permits.items) {
+        try {
+            const { // quantityGroup, amountGroup 찾을 준비
+                quantityRangeX,
+                amountRangeX
+            } = findItemRangeQuantityAmount(textAnnotationsRangeX, quantity, amount, unitPriceGroup);
 
-    // 수량, 금액 요소들을 모아놓은 배열을 만들고 y축에대해 정렬.
-    const quantityGroup = sortGroupAscByY(
-        getFulltextAnnoObjByRange(
-            fullTextAnnotationPlusStudy,
-            quantityRangeX,
-            itemRangeY,
-            true,
-            {includeSymbols: false}
-        )
-    );
+            // 수량, 금액 요소들을 모아놓은 배열을 만들고 y축에대해 정렬.
+            const quantityGroup = sortGroupAscByY(
+                getFulltextAnnoObjByRange(
+                    fullTextAnnotationPlusStudy,
+                    quantityRangeX,
+                    itemRangeY,
+                    true,
+                    {includeSymbols: false}
+                )
+            );
+            const amountGroup = sortGroupAscByY(
+                getFulltextAnnoObjByRange(
+                    fullTextAnnotationPlusStudy,
+                    amountRangeX,
+                    itemRangeY,
+                    true,
+                    {includeSymbols: false}
+                )
+            );
+            
+            // console.log('productNameGroup', productNameGroup);
+            // console.log('unitPriceGroup', unitPriceGroup);
+            // console.log('quantityGroup', quantityGroup);
+            // console.log('amountGroup', amountGroup);
+            // console.log('receiptInfoGroup', receiptInfoGroup);
+            // console.log("TaxSummaryNumberGroup", TaxSummaryNumberGroup);
+            
+            // 상품명, 단가, 수량, 금액 요소들의 텍스트들을 행열에 맞춰 모두 같은 길이의 배열로 만들기.
+            const textArrays = getTextArraysFromGroups(
+                productNameGroup,
+                unitPriceGroup,
+                quantityGroup,
+                amountGroup
+            );
+                
+            /* 다듬기
+            상품명: 숫자 두개로 시작하면 숫자 두개 제거, 공백으로 시작하거나 공백으로 끝나면 공백 제거
+            나머지: 공백으로 시작하거나 공백으로 끝나면 공백 제거, 쉼표+숫자+숫자+숫자 발견시 쉼표 제거(그냥 모든쉼표 제거로 대체+포인트(.)로잘못찾는것도 제거) */
+            const productNameArr = deleteSpacesEachEleOfFrontAndBackInArr(
+                deleteStartingTwoNumbersEachEleInArr(textArrays.productNameArray)
+            );
+            const unitPriceArr = deleteAllNotNumberEachEleInArr(textArrays.unitPriceArray);
+            const quantityArr = deleteAllNotNumberEachEleInArr(textArrays.quantityArray);
+            const amountArr = deleteAllNotNumberEachEleInArr(textArrays.amountArray);
+                
+            // receipt.itemArray 완성
+            receipt.readReceiptItems(productNameArr, unitPriceArr, quantityArr, amountArr);
 
-    const amountGroup = sortGroupAscByY(
-        getFulltextAnnoObjByRange(
-            fullTextAnnotationPlusStudy,
-            amountRangeX,
-            itemRangeY,
-            true,
-            {includeSymbols: false}
-        )
-    );
+        } catch (error) {
+            failures.push(error.stack)
+            permits.items = false
+        };
+    };
+                    
+    if (permits.receiptInfo) {
+        try {
+            // ReceiptInfoGroup에서 ReceiptInfo 추출하고 영수증 객체에 입력
+            receipt.readReceiptInfo(getReceiptInfoFromGroup(receiptInfoGroup));
+        } catch (error) {
+            failures.push(error.stack)
+            permits.receiptInfo = false
+        };
+    };
 
-    // console.log('productNameGroup', productNameGroup);
-    // console.log('unitPriceGroup', unitPriceGroup);
-    // console.log('quantityGroup', quantityGroup);
-    // console.log('amountGroup', amountGroup);
-    // console.log('receiptInfoGroup', receiptInfoGroup);
-    // console.log("TaxSummaryNumberGroup", TaxSummaryNumberGroup);
+    if (permits.shopInfo) {
+        try {
+            // ShopInfoGroup에서 ShopInfo 추출하고 영수증 갹체에 입력
+            receipt.readShopInfo(getShopInfoFromGroup(shopInfoGroup));
+        } catch (error) {
+            failures.push(error.stack)
+            permits.shopInfo = false
+        };
+    };
 
-    // 상품명, 단가, 수량, 금액 요소들의 텍스트들을 행열에 맞춰 모두 같은 길이의 배열로 만들기.
-    const textArrays = getTextArraysFromGroups(
-        productNameGroup,
-        unitPriceGroup,
-        quantityGroup,
-        amountGroup
-    );
-
-    /* 다듬기
-    상품명: 숫자 두개로 시작하면 숫자 두개 제거, 공백으로 시작하거나 공백으로 끝나면 공백 제거
-    나머지: 공백으로 시작하거나 공백으로 끝나면 공백 제거, 쉼표+숫자+숫자+숫자 발견시 쉼표 제거(그냥 모든쉼표 제거로 대체+포인트(.)로잘못찾는것도 제거) */
-    const productNameArr = deleteSpacesEachEleOfFrontAndBackInArr(
-        deleteStartingTwoNumbersEachEleInArr(textArrays.productNameArray)
-    );
-    const unitPriceArr = deleteAllNotNumberEachEleInArr(textArrays.unitPriceArray);
-    const quantityArr = deleteAllNotNumberEachEleInArr(textArrays.quantityArray);
-    const amountArr = deleteAllNotNumberEachEleInArr(textArrays.amountArray);
-
-    //
-    receipt.readReceiptItems(productNameArr, unitPriceArr, quantityArr, amountArr)
-    
-    // ReceiptInfoGroup에서 ReceiptInfo 추출하고 영수증 객체에 입력
-    receipt.readReceiptInfo(getReceiptInfoFromGroup(receiptInfoGroup));
-
-    // ShopInfoGroup에서 ShopInfo 추출하고 영수증 갹체에 입력
-    receipt.readShopInfo(getShopInfoFromGroup(shopInfoGroup));
-
-    // TaxSummaryNumberGroup에서 TaxSummary 추출하고 영수증 객체에 입력
-    receipt.readTaxSummary(getTaxSummaryFromGroup(TaxSummaryNumberGroup, taxSummaryRangeY[2]));
+    if (permits.taxSummary) {
+        try {
+            // TaxSummaryNumberGroup에서 TaxSummary 추출하고 영수증 객체에 입력
+            receipt.readTaxSummary(getTaxSummaryFromGroup(taxSummaryNumberGroup, taxSummaryRangeY[2]));
+        } catch (error) {
+            failures.push(error.stack)
+            permits.taxSummary = false
+        };
+    };
 
     // console.log('receipt', receipt);
-    return receipt;
+    return {receipt, failures, permits};
 };
 
 /* -#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#- */
 
-class idx { // 오직, 해석과 Dev편의성을 위한 놈
+class idx {
     constructor(
         public pageIdx: number,
         public blockIdx?: number,
@@ -263,7 +347,7 @@ function getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, reg) {
         })
         // 모든 페이지에서 없으면?
         if (!isInPage) {
-            return []
+            return [] // 임시
         }
     }
     else {
@@ -335,7 +419,7 @@ function findItemRangeUntilUnitPrice(textAnnotations, fullTextAnnotationPlusStud
         }
     });
 
-    // 총합계 (면세summary 하안, 금액 summary 상안) Pin
+    //
     const summaryYTopPin = getFulltextAnnoObjByReg(fullTextAnnotationPlusStudy, /총\s*합\s*계/)
 
     // 2. 아이템 y축 하안선 기준요소 찾기 (+부가세summary Y영역도)
@@ -648,7 +732,7 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
         return {productNameArray, unitPriceArray, quantityArray, amountArray};
     }
     else {
-        return null;
+        throw new Error("Failed to make textArrays : length of arrays are not same.")
     }
 
     /**
@@ -778,7 +862,7 @@ function getTextArraysFromGroups(productNameGroup, unitPriceGroup, quantityGroup
      * amount 전용 툴
      * 
      * - symbol 레벨로 쪼개져 찾는경우 솔루션
-     * 
+     * - 중복 코드 제거하기
      */
     function makeAmountArrFromGroup(group) {
         let arr = []
@@ -955,6 +1039,9 @@ function getShopInfoFromGroup(group) {
     return {name, tel, address, owner, businessNumber}
 };
 
+/**
+ * 
+ */
 function getTaxSummaryFromGroup(group, style) {
     const taxSummarySentenceArr = deleteAllNotNumberEachEleInArr(getSentenceArrFromGroup(group))
     let result = {

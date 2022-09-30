@@ -18,20 +18,20 @@ while (true) {
         const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptNumber}-body.ts`, 'utf8').slice(9));
         const expectReceipt = JSON.parse(readFileSync(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}/${receiptNumber}.ts`, 'utf8').slice(9));
 
-        const receiptObject = getReceiptObject(
+        const {receipt} = getReceiptObject(
             googleVisionAnnoInspectorPipe(annotateResult),
             multipartBody
         );
 
-        const expectResult = expect(receiptObject, expectReceipt)
+        const expectResult = expect(receipt, expectReceipt)
         // expect 만족하면
         if (expectResult === true) {
-            resultArray.push(receiptObject)
+            resultArray.push(receipt)
             console.log("PASS")
             resultMessageArray[0].push(receiptNumber)
         }
         else { // 만족 안하면
-            resultArray.push({receiptObject, message: expectResult})
+            resultArray.push({receipt, message: expectResult})
             console.log("FAIL: ", expectResult)
             resultMessageArray[1].push(receiptNumber)
         }
