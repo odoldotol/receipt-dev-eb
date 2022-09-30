@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import {Storage} from '@google-cloud/storage';
 import credentials from '../../credential.json';
@@ -11,6 +11,11 @@ import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { writeFile } from 'fs';
 import { v4 as uuidv4 } from 'uuid'
 import { Receipt } from '../receiptObj/define.V0.1.1'
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Receipt as ReceiptSchemaClass, ReceiptDocument } from './schemas/receipt.schema';
+import { Annotate_response, Annotate_responseDocument } from './schemas/annotate_response.schema';
+import { Read_failure, Read_failureDocument } from './schemas/read_failure.schema';
 
 @Injectable()
 export class ReciptToSheetService {
@@ -22,6 +27,9 @@ export class ReciptToSheetService {
 
     constructor(
         private readonly configService: ConfigService,
+        @InjectModel(Annotate_response.name) private annotateResponseModel: Model<Annotate_responseDocument>,
+        @InjectModel(ReceiptSchemaClass.name) private receiptModel: Model<ReceiptDocument>,
+        @InjectModel(Read_failure.name) private readFailureModel: Model<Read_failureDocument>,
     ) {
         this.imageAnnotatorClient = new ImageAnnotatorClient({credentials});
         this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
@@ -29,6 +37,9 @@ export class ReciptToSheetService {
         this.bucketName = "receipt-image-dev"
     }
 
+    /**
+     * 
+     */
     async processingReceiptImage(reciptImage: Express.Multer.File) { 
         // 영수증인지 확인하기? (optional, potentially essential)
 
@@ -42,6 +53,9 @@ export class ReciptToSheetService {
         return { annoRes, imageUri };
     };
 
+    /**
+     * 
+     */
     async processingAnnoRes(annoRes, imageUri: string, multipartBody: MultipartBodyDto, requestDate: Date) {
 
         // 생각해보니, 거꾸로였다!! 잘 만들어진 어떤 특정 영수증 솔루션에 정상 해독되면 그 특정 영수증이라고 판단하는게 더 나을수도있겠네!?
@@ -66,7 +80,7 @@ export class ReciptToSheetService {
         // ----------------------------------------------
         
         // annoRes(+imageUri) 디비에 저장하기
-
+        const saveResult_AnnoRes = await this.saveAnnoRes(annoRes, imageUri)
         // 데이터 추출하고 영수증객체 만들기
         /*
         1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
@@ -85,27 +99,23 @@ export class ReciptToSheetService {
         if (permits.items) {
             // 출력요청 처리하기
             await this.executeOutputRequest(receipt)
-        }
+        };
 
-        /*
-        receipt(+annoResId) 디비에 저장하기
-        failures(+imageUri,annoResId,receiptId,permits) 디비에 저장하기
-        */
+        // receipt(+annoResId) 디비에 저장하기
+        const saveResult_Receipt = await this.saveReceipt(receipt, saveResult_AnnoRes)
 
-        return {receipt, failures, permits};
+        let saveResult_Failures = undefined
+        if (failures.length > 0) {
+            // failures(+imageUri,annoResId,receiptId,permits) 디비에 저장하기
+            saveResult_Failures = await this.saveFailures(failures, permits, imageUri, saveResult_AnnoRes, saveResult_Receipt)
+        };
+
+        return {receipt, permits, saveResult_Failures};
     };
 
-    async executeOutputRequest(receipt: Receipt) {
-        // Sheet 만들기 (csv | xlsx) -> attachments 만들기
-        const attachments = this.createAttachments(receipt);
-        
-        // 이메일 보내기
-        const email = await this.sendEmail(attachments, receipt);
-
-        // 요청 처리 결과 저장
-        receipt.completeOutputRequest(email);
-    }
-
+    /**
+     * 
+     */
     async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
         
         const {receiptStyle, labsReceiptNumber} = multipartBody;
@@ -121,6 +131,83 @@ export class ReciptToSheetService {
         writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
     };
 
+    /**
+     * 
+     */
+    async saveAnnoRes(response, imageAddress) {
+        const newAnnotateResponse = new this.annotateResponseModel({
+            imageAddress,
+            response
+        })
+        let result
+        await newAnnotateResponse.save()
+            .then((res) => {
+                result = res._id
+            })
+            .catch((err) => {
+                throw new InternalServerErrorException(err)
+            })
+        return result
+    };
+
+    /**
+     * 
+     */
+     async executeOutputRequest(receipt: Receipt) {
+        // Sheet 만들기 (csv | xlsx) -> attachments 만들기
+        const attachments = this.createAttachments(receipt);
+        
+        // 이메일 보내기
+        const email = await this.sendEmail(attachments, receipt);
+
+        // 요청 처리 결과 저장
+        receipt.completeOutputRequest(email);
+    };
+
+    /**
+     * 
+     */
+    async saveReceipt(receipt:Receipt, annotate_responseId) {
+        const newReceipt = new this.receiptModel({
+            ...receipt,
+            annotate_responseId
+        })
+        let result
+        await newReceipt.save()
+            .then((res) => {
+                result = res._id
+            })
+            .catch((err) => {
+                throw new InternalServerErrorException(err)
+            })
+        return result
+    };
+
+    /**
+     * 
+     */
+    async saveFailures(failures, permits, imageAddress, annotate_responseId, receiptId) {
+        const newReadFailure = new this.readFailureModel({
+            failures,
+            permits,
+            imageAddress,
+            annotate_responseId,
+            receiptId
+        })
+        let result
+        await newReadFailure.save()
+            .then((res) => {
+                result = res.failures
+            })
+            .catch((err) => {
+                throw new InternalServerErrorException(err)
+            })
+        return result
+    };
+
+    /**
+     * 
+     */
     async uploadImageToGCS(image: Express.Multer.File) {
         const destFileName = uuidv4() + "." + /(?<=image\/)[a-z]*/.exec(image.mimetype)[0];
         const contents = image.buffer
@@ -129,6 +216,9 @@ export class ReciptToSheetService {
         return destFileName;
     }
 
+    /**
+     * 
+     */
     async annotateImage(image: Express.Multer.File) {
         const request = {
             "image": {
@@ -153,6 +243,10 @@ export class ReciptToSheetService {
             });
         return result
     };
+
+    /**
+     * 
+     */
     async annotateGscImage(imageUri: string) {
         const request = {
             "image": {
@@ -180,6 +274,9 @@ export class ReciptToSheetService {
         return result
     };
 
+    /**
+     * 
+     */
     createAttachments(receipt: Receipt) {
         const sheetFormat = receipt.outputRequests[receipt.outputRequests.length-1].sheetFormat;
         let attachment
@@ -241,6 +338,9 @@ export class ReciptToSheetService {
         }]
     };
 
+    /**
+     * 
+     */
     async sendEmail(attachments, receipt: Receipt) {
         const date = receipt.readFromReceipt.date
         const msg = {

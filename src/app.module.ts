@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app/app.controller';
 import { AppService } from './app/app.service';
 import { ReciptToSheetModule } from './recipt-to-sheet/recipt-to-sheet.module';
@@ -9,6 +10,13 @@ import { ReciptToSheetModule } from './recipt-to-sheet/recipt-to-sheet.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ".env"
+    }),
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        uri: `${configService.get('MONGO_URL')}${configService.get('MONGO_database')}${configService.get('MONGO_Query')}`
+      }),
+      inject: [ConfigService],
     }),
     ReciptToSheetModule
   ],

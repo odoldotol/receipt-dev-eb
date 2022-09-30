@@ -69,7 +69,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
         taxSummary: true
     }
 
-    // 영수증 객체 생성!
+    // 영수증 객체 생성! (여기 단계에서는 절대 실패하면 안됨)
     const receipt = new Receipt(
         emailAddress,
         imageUri? imageUri : null,

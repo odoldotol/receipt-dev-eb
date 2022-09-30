@@ -309,4 +309,4 @@ class Receipt {
         }
     };
 
-export {Receipt}
+export { Receipt, Provider, ReceiptItem, ReceiptReadFromReceipt, ProviderInput, OutputRequest }
