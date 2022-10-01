@@ -24,9 +24,9 @@ export class ReciptToSheetController {
         return this.reciptToSheetService.processingAnnoRes(annoRes, imageUri, multipartBody, requestDate); // imageUri 는 나중에 body 로 들어온다
     };
 
-    @Post('lab')
-    @UseInterceptors(FileInterceptor('reciptImage'/*, {options} */))
-    sendGoogleVisionAnnotateResultToLabs(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) {
-        return this.reciptToSheetService.sendGoogleVisionAnnotateResultToLabs(reciptImage, multipartBody);
-    };
+    // @Post('lab')
+    // @UseInterceptors(FileInterceptor('reciptImage'/*, {options} */))
+    // sendGoogleVisionAnnotateResultToLabs(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) {
+    //     return this.reciptToSheetService.sendGoogleVisionAnnotateResultToLabs(reciptImage, multipartBody);
+    // };
 };
