@@ -78,9 +78,9 @@ export class ReciptToSheetService {
          */
 
         // ----------------------------------------------
-        
-        // annoRes(+imageUri) 디비에 저장하기
+        // annoRes 저장하기
         const saveResult_AnnoRes = await this.saveAnnoRes(annoRes, imageUri)
+
         // 데이터 추출하고 영수증객체 만들기
         /*
         1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
@@ -99,12 +99,12 @@ export class ReciptToSheetService {
         // 출력요청 처리하기
         await this.executeOutputRequest(receipt, permits)
         
-        // receipt(+annoResId) 디비에 저장하기
+        // receipt 저장하기
         const saveResult_Receipt = await this.saveReceipt(receipt, saveResult_AnnoRes)
 
         let saveResult_Failures = undefined
         if (failures.length > 0) {
-            // failures(+imageUri,annoResId,receiptId,permits) 디비에 저장하기
+            // failures 저장하기
             saveResult_Failures = await this.saveFailures(failures, permits, imageUri, saveResult_AnnoRes, saveResult_Receipt)
         };
 
@@ -132,6 +132,45 @@ export class ReciptToSheetService {
     /**
      * 
      */
+    async uploadImageToGCS(image: Express.Multer.File) {
+        const destFileName = uuidv4() + "." + /(?<=image\/)[a-z]*/.exec(image.mimetype)[0];
+        const contents = image.buffer
+        try {
+            await this.googleCloudStorage.bucket(this.bucketName).file(destFileName).save(contents);
+            return destFileName;
+        } catch (err) {
+            throw new InternalServerErrorException(err);
+        };
+    };
+
+    /**
+     * 
+     */
+    async annotateGscImage(imageUri: string) {
+        const request = {
+            "image": {
+                "source": {
+                    imageUri
+                }
+            },
+            "features": [
+                {"type": "TEXT_DETECTION"},
+                {"type": "DOCUMENT_TEXT_DETECTION"},
+                {"type": "CROP_HINTS"},
+                // {"type": "LOGO_DETECTION"},
+            ]
+        };
+        try {
+            const annoRes = await this.imageAnnotatorClient.annotateImage(request);
+            return annoRes;
+        } catch (error) {
+            return {error};
+        };
+    };
+
+    /**
+     * 
+     */
     async saveAnnoRes(response, imageAddress) {
         const newAnnotateResponse = new this.annotateResponseModel({
             imageAddress,
@@ -152,7 +191,6 @@ export class ReciptToSheetService {
      * 
      */
      async executeOutputRequest(receipt: Receipt, permits) {
-
         let email
         if (permits.items) {
             // Sheet 만들기 (csv | xlsx) -> attachments 만들기
@@ -206,75 +244,6 @@ export class ReciptToSheetService {
             .catch((err) => {
                 throw new InternalServerErrorException(err)
             })
-        return result
-    };
-
-    /**
-     * 
-     */
-    async uploadImageToGCS(image: Express.Multer.File) {
-        const destFileName = uuidv4() + "." + /(?<=image\/)[a-z]*/.exec(image.mimetype)[0];
-        const contents = image.buffer
-        await this.googleCloudStorage.bucket(this.bucketName).file(destFileName).save(contents)
-
-        return destFileName;
-    }
-
-    /**
-     * 
-     */
-    async annotateImage(image: Express.Multer.File) {
-        const request = {
-            "image": {
-                "content": image.buffer.toString('base64')
-            },
-            "features": [
-                {"type": "TEXT_DETECTION"},
-                {"type": "DOCUMENT_TEXT_DETECTION"},
-                {"type": "CROP_HINTS"},
-                // {"type": "LOGO_DETECTION"},
-            ]
-        };
-        let result
-        await this.imageAnnotatorClient.annotateImage(request)
-            .then(results => {
-                // console.log(results);
-                result = results
-            })
-            .catch(err => {
-                console.error('annotateImage ERROR:', err);
-                result = err
-            });
-        return result
-    };
-
-    /**
-     * 
-     */
-    async annotateGscImage(imageUri: string) {
-        const request = {
-            "image": {
-                "source": {
-                    imageUri
-                }
-            },
-            "features": [
-                {"type": "TEXT_DETECTION"},
-                {"type": "DOCUMENT_TEXT_DETECTION"},
-                {"type": "CROP_HINTS"},
-                // {"type": "LOGO_DETECTION"},
-            ]
-        };
-        let result
-        await this.imageAnnotatorClient.annotateImage(request)
-            .then(results => {
-                // console.log(results);
-                result = results
-            })
-            .catch(err => {
-                console.error('annotateImage ERROR:', err);
-                result = err
-            });
         return result
     };
 
@@ -368,4 +337,39 @@ export class ReciptToSheetService {
             })
         return result
     };
+
+    /**
+     * 
+     */
+     async annotateImage(image: Express.Multer.File) {
+        const request = {
+            "image": {
+                "content": image.buffer.toString('base64')
+            },
+            "features": [
+                {"type": "TEXT_DETECTION"},
+                {"type": "DOCUMENT_TEXT_DETECTION"},
+                {"type": "CROP_HINTS"},
+                // {"type": "LOGO_DETECTION"},
+            ]
+        };
+        let result
+        await this.imageAnnotatorClient.annotateImage(request)
+            .then(results => {
+                // console.log(results);
+                result = results
+            })
+            .catch(err => {
+                console.error('annotateImage ERROR:', err);
+                result = err
+            });
+        return result
+    };
+
+    /**
+     * 
+     */
+    deleteImageInGCS(filename) {
+        return this.googleCloudStorage.bucket(this.bucketName).file(filename).delete()
+    }
 };

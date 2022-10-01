@@ -15,10 +15,10 @@ export class Annotate_response {
     imageAddress: string;
 
     @Prop({
-        type: Object,
+        type: Array<Object>, Object,
         required: true
     })
-    response: [google.cloud.vision.v1.IAnnotateImageResponse]
+    response: [google.cloud.vision.v1.IAnnotateImageResponse] | object
 }
 
 export const Annotate_responseSchema = SchemaFactory.createForClass(Annotate_response);
