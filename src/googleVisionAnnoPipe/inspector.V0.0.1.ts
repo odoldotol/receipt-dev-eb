@@ -2,14 +2,25 @@ export = function(annotateResult) {
     
     const textAnnotations = annotateResult[0].textAnnotations;
 
+    const failures = [];
+
     // textAnnotations 검사
-    textAnnotationsInspector(textAnnotations);
+    try {
+        textAnnotationsInspector(textAnnotations);
+    } catch (error) {
+        failures.push(error.stack);
+    }
 
     // fullTextAnnotation 검사하며 fullTextAnnotationPlusStudy 만들기
     // fullTextAnnotationPlusStudy 은 pages, blocks, paragraphs, words, symbols 각각이 하위요소의 text 내용을 전부 합친 문자열을 text(Study) 로 가진다.
-    const fullTextAnnotationPlusStudy = fullTextAnnotationInspector(annotateResult[0].fullTextAnnotation);
+    let fullTextAnnotationPlusStudy = null
+    try {
+        fullTextAnnotationPlusStudy = fullTextAnnotationInspector(annotateResult[0].fullTextAnnotation);
+    } catch (error) {
+        failures.push(error.stack);
+    }
 
-    return {textAnnotations, fullTextAnnotationPlusStudy};
+    return {textAnnotations, fullTextAnnotationPlusStudy, failures};
 };
 
 /**
