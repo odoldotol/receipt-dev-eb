@@ -15,7 +15,7 @@ async function bootstrap() {
   
   await app.listen(process.env.PORT, () => {
     console.log(`Server is running on port ${process.env.PORT}`);
-    console.log(`MongoDB DATABASE: ${process.env.MONGO_database}`);
+    console.log(`MongoDB Connected on ${process.env.MONGO_database}`); // 앱 모듈에서 출력하는 법을 모름.
   });
 }
 bootstrap();

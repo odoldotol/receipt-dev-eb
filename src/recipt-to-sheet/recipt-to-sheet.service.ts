@@ -34,7 +34,16 @@ export class ReciptToSheetService {
         this.imageAnnotatorClient = new ImageAnnotatorClient({credentials});
         this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
         this.googleCloudStorage = new Storage({credentials});
-        this.bucketName = "receipt-image-dev"
+        if (this.configService.get('MONGO_database') === "receiptTo") {
+            this.bucketName = "receipt-image-dev"
+        }
+        else if (this.configService.get('MONGO_database') === "receiptTo-test") {
+            this.bucketName = "receipt-image-test"
+        }
+        else {
+            console.log('MONGO_database: ', this.configService.get('MONGO_database'))
+            throw new InternalServerErrorException("failed to set bucketName")
+        }
     }
 
     /**
