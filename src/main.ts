@@ -6,7 +6,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
   app.enableCors({
-      origin: 'https://www.lapiki-invest.com',
+      origin: 'https://receipt-dev.vercel.app',
       credentials: true,
   });
   
