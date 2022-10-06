@@ -5,7 +5,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  app.enableCors();
+  app.enableCors({
+      origin: 'https://www.lapiki-invest.com',
+      credentials: true,
+  });
   
   app.useGlobalPipes(new ValidationPipe({
     transform: true,
