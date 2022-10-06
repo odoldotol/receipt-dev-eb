@@ -9,8 +9,7 @@ export class MultipartBodyDto {
     @IsIn(["xlsx","csv"])
     readonly sheetFormat: string;
 
-    @IsOptional()
-    @IsIn(['homeplus'])
+    @IsIn(['homeplus','emart','costco','lottemart'])
     readonly receiptStyle?: string;
 
     @IsOptional()
