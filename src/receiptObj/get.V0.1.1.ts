@@ -55,13 +55,12 @@ import { Receipt } from './define.V0.1.1';
 /**
  * 
  */
-export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}, multipartBody: MultipartBodyDto, imageUri?: string): {receipt: Receipt, failures: any[], permits: {items, receiptInfo, shopInfo, taxSummary} } {
+export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy, failures}, multipartBody: MultipartBodyDto, imageUri?: string): {receipt: Receipt, failures: any[], permits: {items, receiptInfo, shopInfo, taxSummary} } {
     
-    const {textAnnotations, fullTextAnnotationPlusStudy} = annotateResult;
+    const {textAnnotations, fullTextAnnotationPlusStudy, failures} = annotateResult;
     const {emailAddress, receiptStyle} = multipartBody
 
     //
-    const failures = []
     const permits = {
         items: true,
         receiptInfo: true,
@@ -274,6 +273,10 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy}
             failures.push(error.stack)
             permits.taxSummary = false
         };
+    };
+
+    if (permits.items) {
+        receipt.complete();
     };
 
     // console.log('receipt', receipt);

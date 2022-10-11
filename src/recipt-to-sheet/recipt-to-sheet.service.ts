@@ -16,6 +16,7 @@ import { Model } from 'mongoose';
 import { Receipt as ReceiptSchemaClass, ReceiptDocument } from './schemas/receipt.schema';
 import { Annotate_response, Annotate_responseDocument } from './schemas/annotate_response.schema';
 import { Read_failure, Read_failureDocument } from './schemas/read_failure.schema';
+import convert from 'heic-convert';
 
 @Injectable()
 export class ReciptToSheetService {
@@ -34,18 +35,41 @@ export class ReciptToSheetService {
         this.imageAnnotatorClient = new ImageAnnotatorClient({credentials});
         this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
         this.googleCloudStorage = new Storage({credentials});
-        this.bucketName = "receipt-image-dev"
+        if (this.configService.get('MONGO_database') === "receiptTo") {
+            this.bucketName = "receipt-image-dev"
+        }
+        else if (this.configService.get('MONGO_database') === "receiptTo-test") {
+            this.bucketName = "receipt-image-test"
+        }
+        else {
+            console.log('MONGO_database: ', this.configService.get('MONGO_database'))
+            throw new InternalServerErrorException("failed to set bucketName")
+        }
     }
 
     /**
      * 
      */
     async processingReceiptImage(reciptImage: Express.Multer.File) { 
+        // heic 형식일 경우 jpeg 로 변환 // 폰에서는 자동변환되는것같다?
+        let buffer
+        let mimetype
+        if (reciptImage.mimetype === "image/heic") {
+            buffer = await convert({
+                buffer: reciptImage.buffer,
+                format: 'JPEG',
+                quality: 1
+            });
+            mimetype = "image/jpeg"
+        } else {
+            buffer = reciptImage.buffer
+            mimetype = reciptImage.mimetype
+        };
+
         // 영수증인지 확인하기? (optional, potentially essential)
 
         // Google Cloud 에 이미지 업로드
-        const filename = await this.uploadImageToGCS(reciptImage)
-
+        const filename = await this.uploadImageToGCS(mimetype, buffer)
 
         // 구글 비젼 API 돌리기
         const imageUri = `gs://${this.bucketName}/${filename}`
@@ -114,29 +138,28 @@ export class ReciptToSheetService {
     /**
      * 
      */
-    async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
+    // async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
         
-        const {receiptStyle, labsReceiptNumber} = multipartBody;
-        if (!receiptStyle || !labsReceiptNumber) {
-            throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
-        }
-        const annotateResult = await this.annotateImage(reciptImage);
+    //     const {receiptStyle, labsReceiptNumber} = multipartBody;
+    //     if (!receiptStyle || !labsReceiptNumber) {
+    //         throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
+    //     }
+    //     const annotateResult = await this.annotateImage(reciptImage);
 
-        let data = "export = " + JSON.stringify(annotateResult, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
+    //     let data = "export = " + JSON.stringify(annotateResult, null, 4);
+    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
 
-        data = "export = " + JSON.stringify(multipartBody, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
-    };
+    //     data = "export = " + JSON.stringify(multipartBody, null, 4);
+    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
+    // };
 
     /**
      * 
      */
-    async uploadImageToGCS(image: Express.Multer.File) {
-        const destFileName = uuidv4() + "." + /(?<=image\/)[a-z]*/.exec(image.mimetype)[0];
-        const contents = image.buffer
+    async uploadImageToGCS(mimetype, buffer) {
+        const destFileName = uuidv4() + "." + /(?<=image\/)[a-z]*/.exec(mimetype)[0];
         try {
-            await this.googleCloudStorage.bucket(this.bucketName).file(destFileName).save(contents);
+            await this.googleCloudStorage.bucket(this.bucketName).file(destFileName).save(buffer);
             return destFileName;
         } catch (err) {
             throw new InternalServerErrorException(err);
