@@ -46,6 +46,7 @@ credential.json
 /src/googleVisionAnnoLab/annotateResult
 /src/googleVisionAnnoLab/expectReceipt
 /src/googleVisionAnnoLab/fullTextAnnotationPlusStudy
+/src/receiptObj
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*

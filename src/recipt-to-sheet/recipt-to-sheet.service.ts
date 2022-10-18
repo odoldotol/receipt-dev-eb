@@ -5,12 +5,11 @@ import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
-import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
-import getReceiptObject from '../receiptObj/get.V0.1.1';
+import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
+import * as receiptObject from '../receiptObj';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
-import { writeFile } from 'fs';
 import { v4 as uuidv4 } from 'uuid'
-import { Receipt } from '../receiptObj/define.V0.1.1'
+import { Receipt } from '../receiptObj/define.V0.1.1' // Receipt Version
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Receipt as ReceiptSchemaClass, ReceiptDocument } from './schemas/receipt.schema';
@@ -21,10 +20,11 @@ import convert from 'heic-convert';
 @Injectable()
 export class ReciptToSheetService {
 
-    private imageAnnotatorClient: ImageAnnotatorClient
-    private sgMail
-    private googleCloudStorage: Storage
-    private bucketName: string
+    private readonly imageAnnotatorClient: ImageAnnotatorClient
+    private readonly sgMail
+    private readonly googleCloudStorage: Storage
+    private readonly bucketName: string
+    private readonly getReceiptObject
 
     constructor(
         private readonly configService: ConfigService,
@@ -35,6 +35,7 @@ export class ReciptToSheetService {
         this.imageAnnotatorClient = new ImageAnnotatorClient({credentials});
         this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
         this.googleCloudStorage = new Storage({credentials});
+
         if (this.configService.get('MONGO_database') === "receiptTo") {
             this.bucketName = "receipt-image-dev"
         }
@@ -44,11 +45,13 @@ export class ReciptToSheetService {
         else {
             console.log('MONGO_database: ', this.configService.get('MONGO_database'))
             throw new InternalServerErrorException("failed to set bucketName")
-        }
-    }
+        };
+
+        this.getReceiptObject = receiptObject.get_V0_2_1; // Receipt Version
+    };
 
     /**
-     * 
+     * FE
      */
     async processingReceiptImage(reciptImage: Express.Multer.File) { 
         // heic 형식일 경우 jpeg 로 변환 // 폰에서는 자동변환되는것같다?
@@ -78,7 +81,7 @@ export class ReciptToSheetService {
     };
 
     /**
-     * 
+     * BE Main
      */
     async processingAnnoRes(annoRes, imageUri: string, multipartBody: MultipartBodyDto, requestDate: Date) {
 
@@ -110,11 +113,15 @@ export class ReciptToSheetService {
         1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
         2. 홈플러스 솔루션으로 text 추출하여 영수증객체 만들기
         */
-        const {receipt, failures, permits} = getReceiptObject(
+        // 0.2.1 이전
+        /*
+        const {receipt, failures, permits} = this.getReceiptObject(
             googleVisionAnnoInspectorPipe(annoRes), // 파이프 돌릴떄의 발견되는 예외도 보고 받을수 있도록 수정해야함
             multipartBody,
             imageUri
         );
+        */
+        const {receipt, failures, permits} = this.getReceiptObject(annoRes, multipartBody, imageUri);
 
         // 출력 요청 만들어서 영수증 객체에 넣기
         const requestType = 'provided'
@@ -134,24 +141,6 @@ export class ReciptToSheetService {
 
         return {receipt, permits, saveResult_Failures};
     };
-
-    /**
-     * 
-     */
-    // async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
-        
-    //     const {receiptStyle, labsReceiptNumber} = multipartBody;
-    //     if (!receiptStyle || !labsReceiptNumber) {
-    //         throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
-    //     }
-    //     const annotateResult = await this.annotateImage(reciptImage);
-
-    //     let data = "export = " + JSON.stringify(annotateResult, null, 4);
-    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
-
-    //     data = "export = " + JSON.stringify(multipartBody, null, 4);
-    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
-    // };
 
     /**
      * 
@@ -388,11 +377,4 @@ export class ReciptToSheetService {
             });
         return result
     };
-
-    /**
-     * 
-     */
-    deleteImageInGCS(filename) {
-        return this.googleCloudStorage.bucket(this.bucketName).file(filename).delete()
-    }
 };
