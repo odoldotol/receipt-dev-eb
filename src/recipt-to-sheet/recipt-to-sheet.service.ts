@@ -265,7 +265,7 @@ export class ReciptToSheetService {
     createAttachments(receipt: Receipt) {
         const sheetFormat = receipt.outputRequests[receipt.outputRequests.length-1].sheetFormat;
         let attachment
-        const date = receipt.readFromReceipt.date
+        const date = receipt.readFromReceipt.date? receipt.readFromReceipt.date : new Date(undefined);
         if (sheetFormat === 'csv') {
             // let csvData = "0,1,2,3,4,5,6,7,8,9\n"
             // textArr[0] = '"'+textArr[0]+'"'
@@ -327,7 +327,7 @@ export class ReciptToSheetService {
      * 
      */
     async sendEmail(attachments, receipt: Receipt) {
-        const date = receipt.readFromReceipt.date
+        const date = receipt.readFromReceipt.date? receipt.readFromReceipt.date : new Date(undefined);
         const msg = {
             to: receipt.outputRequests[receipt.outputRequests.length-1].emailAddress, // recipient
             from: 'service.lygo@gmail.com', // verified sender
