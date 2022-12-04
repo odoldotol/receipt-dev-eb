@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app/app.controller';
 import { AppService } from './app/app.service';
-import { ReciptToSheetModule } from './recipt-to-sheet/recipt-to-sheet.module';
+import { ReciptToSheetModule } from './receipt-to-sheet/recipt-to-sheet.module';
 
 @Module({
   imports: [
