@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post, Put, Query, Redirect, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post, Redirect, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
@@ -24,9 +24,11 @@ export class ReciptToSheetController {
             throw new UnauthorizedException();
         };
         const requestDate = new Date();
+
         // FE
         const {annoRes, imageUri} = await this.reciptToSheetService.processingReceiptImage(reciptImage);
+        
         // BE
         return this.reciptToSheetService.processingAnnoRes(annoRes, imageUri, multipartBody, requestDate); // imageUri 는 나중에 body 로 들어온다
     };
-};
+}

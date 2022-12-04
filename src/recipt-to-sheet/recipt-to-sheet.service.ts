@@ -1,30 +1,32 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import {Storage} from '@google-cloud/storage';
 import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
-import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
-import * as receiptObject from '../receiptObj';
+import googleVisionAnnoInspectorPipe from '../receiptObject/googleVisionAnnoPipe/inspector.V0.0.1';
+import * as receiptObject from '../receiptObject';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { v4 as uuidv4 } from 'uuid'
-import { Receipt } from '../receiptObj/define.V0.1.1' // Receipt Version
+import { Receipt } from '../receiptObject/define.V0.1.1' // Receipt Version
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Receipt as ReceiptSchemaClass, ReceiptDocument } from './schemas/receipt.schema';
 import { Annotate_response, Annotate_responseDocument } from './schemas/annotate_response.schema';
 import { Read_failure, Read_failureDocument } from './schemas/read_failure.schema';
 import convert from 'heic-convert';
+import { google } from '@google-cloud/vision/build/protos/protos';
+import annotateResponse from 'src/util/annotateResponse';
 
 @Injectable()
 export class ReciptToSheetService {
 
-    private readonly imageAnnotatorClient: ImageAnnotatorClient
+    private readonly imageAnnotatorClient = new ImageAnnotatorClient({credentials});
     private readonly sgMail
-    private readonly googleCloudStorage: Storage
-    private readonly bucketName: string
-    private readonly getReceiptObject
+    readonly googleCloudStorage = new Storage({credentials});
+    readonly bucketName: string
+    private readonly getReceiptObject = receiptObject.get_V0_2_1 // Receipt Version
 
     constructor(
         private readonly configService: ConfigService,
@@ -32,9 +34,7 @@ export class ReciptToSheetService {
         @InjectModel(ReceiptSchemaClass.name) private receiptModel: Model<ReceiptDocument>,
         @InjectModel(Read_failure.name) private readFailureModel: Model<Read_failureDocument>,
     ) {
-        this.imageAnnotatorClient = new ImageAnnotatorClient({credentials});
-        this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
-        this.googleCloudStorage = new Storage({credentials});
+        this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'));
 
         if (this.configService.get('MONGO_database') === "receiptTo") {
             this.bucketName = "receipt-image-dev"
@@ -46,8 +46,6 @@ export class ReciptToSheetService {
             console.log('MONGO_database: ', this.configService.get('MONGO_database'))
             throw new InternalServerErrorException("failed to set bucketName")
         };
-
-        this.getReceiptObject = receiptObject.get_V0_2_1; // Receipt Version
     };
 
     /**
@@ -56,7 +54,7 @@ export class ReciptToSheetService {
     async processingReceiptImage(reciptImage: Express.Multer.File) { 
         // heic 형식일 경우 jpeg 로 변환 // 폰에서는 자동변환되는것같다?
         let buffer
-        let mimetype
+        let mimetype: string
         if (reciptImage.mimetype === "image/heic") {
             buffer = await convert({
                 buffer: reciptImage.buffer,
@@ -83,7 +81,7 @@ export class ReciptToSheetService {
     /**
      * BE Main
      */
-    async processingAnnoRes(annoRes, imageUri: string, multipartBody: MultipartBodyDto, requestDate: Date) {
+    async processingAnnoRes(annoRes: google.cloud.vision.v1.IAnnotateImageResponse[], imageUri: string, multipartBody: MultipartBodyDto, requestDate: Date) {
 
         // 생각해보니, 거꾸로였다!! 잘 만들어진 어떤 특정 영수증 솔루션에 정상 해독되면 그 특정 영수증이라고 판단하는게 더 나을수도있겠네!?
         // 우선은 영수증 이미지를 받을때 어떤 영수증인지 정보가 오게해야하고, 그게 안오거나 불확실하는걸 생각해서 저리 순서.과정을 짜자
@@ -124,8 +122,7 @@ export class ReciptToSheetService {
         const {receipt, failures, permits} = this.getReceiptObject(annoRes, multipartBody, imageUri);
 
         // 출력 요청 만들어서 영수증 객체에 넣기
-        const requestType = 'provided'
-        receipt.addOutputRequest(requestDate, multipartBody.sheetFormat, multipartBody.emailAddress, requestType)
+        receipt.addOutputRequest(requestDate, multipartBody.sheetFormat, multipartBody.emailAddress, "provided")
 
         // 출력요청 처리하기
         await this.executeOutputRequest(receipt, permits)
@@ -145,7 +142,7 @@ export class ReciptToSheetService {
     /**
      * 
      */
-    async uploadImageToGCS(mimetype, buffer) {
+    async uploadImageToGCS(mimetype: string, buffer) {
         const destFileName = uuidv4() + "." + /(?<=image\/)[a-z]*/.exec(mimetype)[0];
         try {
             await this.googleCloudStorage.bucket(this.bucketName).file(destFileName).save(buffer);
@@ -176,17 +173,17 @@ export class ReciptToSheetService {
             const annoRes = await this.imageAnnotatorClient.annotateImage(request);
             return annoRes;
         } catch (error) {
-            return {error};
+            throw new InternalServerErrorException(error)
         };
     };
 
     /**
      * 
      */
-    async saveAnnoRes(response, imageAddress) {
+    async saveAnnoRes(response: google.cloud.vision.v1.IAnnotateImageResponse[], imageAddress: string) {
         const newAnnotateResponse = new this.annotateResponseModel({
             imageAddress,
-            response
+            response: annotateResponse.encoder(response)
         })
         let result
         await newAnnotateResponse.save()
@@ -207,7 +204,7 @@ export class ReciptToSheetService {
         if (permits.items) {
             // Sheet 만들기 (csv | xlsx) -> attachments 만들기
             const attachments = this.createAttachments(receipt);
-            
+
             // 이메일 보내기
             email = await this.sendEmail(attachments, receipt);
         }
@@ -377,4 +374,11 @@ export class ReciptToSheetService {
             });
         return result
     };
-};
+
+    /**
+     * 
+     */
+    deleteImageInGCS(filename) {
+        return this.googleCloudStorage.bucket(this.bucketName).file(filename).delete()
+    };
+}

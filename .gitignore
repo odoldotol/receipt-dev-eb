@@ -41,12 +41,12 @@ credential.json
 .env
 
 #
-/src/googleVisionAnnoStudy/sametest.ts
-/src/googleVisionAnnoStudy/fullTextAnnotationPlusStudy.ts
+/src/googleVisionAnnoStudy
 /src/googleVisionAnnoLab/annotateResult
 /src/googleVisionAnnoLab/expectReceipt
 /src/googleVisionAnnoLab/fullTextAnnotationPlusStudy
-/src/receiptObj
+/src/googleVisionAnnoLab/image
+/src/receiptObject
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
